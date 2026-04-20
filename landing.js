@@ -1,7 +1,4 @@
-// ── Theme on load ─────────────────────────────────────────────
-const t = localStorage.getItem('cadence-theme');
-if (t) document.documentElement.dataset.theme = t;
-
+// ── Theme toggle ─────────────────────────────────────────────
 document.getElementById('themeToggle').addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'light' ? null : 'light';
   if (next) {

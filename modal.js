@@ -1,19 +1,3 @@
-// ── Theme toggle ─────────────────────────────────────────────
-
-const themeToggle = document.getElementById('themeToggle');
-const savedTheme  = localStorage.getItem('cadence-theme');
-
-if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-
-themeToggle.addEventListener('click', () => {
-  const isDark = document.documentElement.dataset.theme === 'dark';
-  const next   = isDark ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem('cadence-theme', next);
-});
-
-// ─────────────────────────────────────────────────────────────
-
 const backdrop = document.getElementById('authBackdrop');
 const modal    = document.getElementById('authModal');
 const closeBtn = document.getElementById('modalClose');
