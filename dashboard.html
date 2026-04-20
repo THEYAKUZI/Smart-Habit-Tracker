@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadence — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+
+  <aside class="sidebar">
+    <a href="index.html" class="sidebar-logo">Cadence</a>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-section="today">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Today
+      </a>
+      <a class="nav-item" data-section="habits">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        My Habits
+      </a>
+      <a class="nav-item" data-section="insights">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        AI Insights
+      </a>
+      <a class="nav-item" data-section="stats">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Stats
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <!-- Settings popover -->
+      <div class="settings-popover" id="settingsPopover">
+        <div class="settings-popover-title">Account</div>
+        <div class="settings-view" id="settingsMain">
+          <button class="settings-item" data-view="displayName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Change display name</button>
+          <button class="settings-item" data-view="email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Change email</button>
+          <button class="settings-item" data-view="password"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Change password</button>
+          <div class="settings-divider"></div>
+          <button class="settings-item settings-item--danger" id="logoutBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Log out</button>
+        </div>
+        <div class="settings-view hidden" id="settingsDisplayName">
+          <button class="settings-back" data-back="settingsMain">← Back</button>
+          <p class="settings-view-label">Display name</p>
+          <input class="settings-input" type="text" id="inputDisplayName" placeholder="Your name" />
+          <button class="settings-save" id="saveDisplayName">Save</button>
+        </div>
+        <div class="settings-view hidden" id="settingsEmail">
+          <button class="settings-back" data-back="settingsMain">← Back</button>
+          <p class="settings-view-label">New email</p>
+          <input class="settings-input" type="email" id="inputEmail" placeholder="you@example.com" />
+          <button class="settings-save" id="saveEmail">Save</button>
+        </div>
+        <div class="settings-view hidden" id="settingsPassword">
+          <button class="settings-back" data-back="settingsMain">← Back</button>
+          <p class="settings-view-label">Current password</p>
+          <input class="settings-input" type="password" id="inputCurrentPass" placeholder="Current password" />
+          <p class="settings-view-label" style="margin-top:8px">New password</p>
+          <input class="settings-input" type="password" id="inputNewPass" placeholder="New password" />
+          <button class="settings-save" id="savePassword">Save</button>
+        </div>
+        <div class="settings-view hidden settings-view--success" id="settingsSuccess">
+          <span class="settings-success-icon">✓</span>
+          <p>Saved.</p>
+        </div>
+      </div>
+
+      <div class="xp-row">
+        <span class="xp-level">Lv. 4</span>
+        <span class="xp-bar"><span class="xp-fill" style="width:64%"></span></span>
+        <span class="xp-count" id="xpCount">320 XP</span>
+      </div>
+
+      <div class="sidebar-user" id="userBar">
+        <div class="user-avatar" id="userAvatar">A</div>
+        <div class="user-info">
+          <span class="user-name" id="userName">Admin</span>
+          <span class="user-handle">admin</span>
+        </div>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+          <span class="icon-sun"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></span>
+          <span class="icon-moon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- TODAY -->
+    <section class="section active" id="section-today">
+      <div class="page-header">
+        <div class="page-header-left">
+          <p class="page-eyebrow" id="todayDate">—</p>
+          <h1 class="page-title" id="greetingTitle">Good morning.</h1>
+        </div>
+        <div class="streak-badge">
+          <span class="streak-n" id="overallStreak">14</span>
+          <span class="streak-sub">day<br>streak</span>
+        </div>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+        <span class="progress-label" id="progressLabel">0 / 5 done</span>
+      </div>
+
+      <div class="habit-list" id="habitList"></div>
+
+      <div class="ai-nudge" id="aiNudge">
+        <span class="ai-nudge-tag">AI insight</span>
+        <p id="aiNudgeText"></p>
+        <button class="nudge-dismiss" id="nudgeDismiss">Dismiss</button>
+      </div>
+    </section>
+
+    <!-- MY HABITS -->
+    <section class="section" id="section-habits">
+      <div class="page-header">
+        <div class="page-header-left">
+          <p class="page-eyebrow">Manage</p>
+          <h1 class="page-title">My Habits</h1>
+        </div>
+        <button class="btn-action" id="addHabitBtn">+ Add habit</button>
+      </div>
+
+      <div class="habit-cards" id="habitCardsGrid"></div>
+
+      <div class="add-panel hidden" id="addHabitPanel">
+        <h3>New habit</h3>
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="newHabitName" placeholder="e.g. Read 20 minutes" />
+        </div>
+        <div class="field">
+          <label>Emoji</label>
+          <div class="emoji-row" id="emojiPicker">
+            <button class="emoji-btn active" data-emoji="📚">📚</button>
+            <button class="emoji-btn" data-emoji="🏃">🏃</button>
+            <button class="emoji-btn" data-emoji="🧘">🧘</button>
+            <button class="emoji-btn" data-emoji="💧">💧</button>
+            <button class="emoji-btn" data-emoji="🥗">🥗</button>
+            <button class="emoji-btn" data-emoji="🛌">🛌</button>
+            <button class="emoji-btn" data-emoji="✍️">✍️</button>
+            <button class="emoji-btn" data-emoji="🎸">🎸</button>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-cancel" id="cancelHabit">Cancel</button>
+          <button class="btn-action" id="saveHabit">Add</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section class="section" id="section-insights">
+      <div class="page-header">
+        <div class="page-header-left">
+          <p class="page-eyebrow">Powered by AI</p>
+          <h1 class="page-title">Insights</h1>
+        </div>
+      </div>
+      <div class="insights-list" id="insightsGrid"></div>
+    </section>
+
+    <!-- STATS -->
+    <section class="section" id="section-stats">
+      <div class="page-header">
+        <div class="page-header-left">
+          <p class="page-eyebrow">Last 30 days</p>
+          <h1 class="page-title">Stats</h1>
+        </div>
+      </div>
+
+      <div class="big-stats">
+        <div class="big-stat">
+          <span class="big-stat-n">14</span>
+          <span class="big-stat-l">Longest streak</span>
+        </div>
+        <div class="big-stat">
+          <span class="big-stat-n">87%</span>
+          <span class="big-stat-l">Completion rate</span>
+        </div>
+        <div class="big-stat">
+          <span class="big-stat-n">22</span>
+          <span class="big-stat-l">Active days</span>
+        </div>
+      </div>
+
+      <div class="week-section">
+        <p class="section-micro">This week</p>
+        <div class="chart" id="chartBars"></div>
+        <div class="chart-days" id="chartLabels"></div>
+      </div>
+
+      <div class="achievements-section">
+        <p class="section-micro">Achievements</p>
+        <div class="ach-list">
+          <div class="ach-item unlocked"><span class="ach-icon">🔥</span><div><strong>On Fire</strong><p>7-day streak</p></div><span class="ach-check">✓</span></div>
+          <div class="ach-item unlocked"><span class="ach-icon">🌅</span><div><strong>Early Bird</strong><p>Completed a habit before 8 AM</p></div><span class="ach-check">✓</span></div>
+          <div class="ach-item unlocked"><span class="ach-icon">💯</span><div><strong>Perfect Day</strong><p>All habits done in one day</p></div><span class="ach-check">✓</span></div>
+          <div class="ach-item"><span class="ach-icon">🏔️</span><div><strong>Summit</strong><p>30-day streak</p></div><span class="ach-lock">—</span></div>
+          <div class="ach-item"><span class="ach-icon">⚡</span><div><strong>Unstoppable</strong><p>100 habits completed</p></div><span class="ach-lock">—</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
