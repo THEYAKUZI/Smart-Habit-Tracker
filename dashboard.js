@@ -13,7 +13,56 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   }
 });
 
-// ── Data ──────────────────────────────────────────────────────
+// ── Auth gate + user state ────────────────────────────────────
+const token = localStorage.getItem('cadence-token');
+if (!token) { window.location.href = 'index.html'; }
+
+let currentUser = null;
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {})
+    }
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('cadence-token');
+    localStorage.removeItem('cadence-user');
+    window.location.href = 'index.html';
+    throw new Error('Session expired');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+async function loadUser() {
+  const { user } = await api('/api/me');
+  currentUser = user;
+  paintUser();
+}
+
+function paintUser() {
+  if (!currentUser) return;
+  document.getElementById('userName').textContent   = currentUser.name;
+  document.getElementById('userAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
+  const handleEl = document.querySelector('.user-handle');
+  if (handleEl) handleEl.textContent = currentUser.email;
+
+  const xpIntoLevel = currentUser.xp % 500;
+  const pct = Math.min((xpIntoLevel / 500) * 100, 100);
+  document.querySelector('.xp-level').textContent = `Lv. ${currentUser.level}`;
+  document.querySelector('.xp-fill').style.width  = pct + '%';
+  document.getElementById('xpCount').textContent  = `${currentUser.xp} XP`;
+
+  document.getElementById('greetingTitle').textContent =
+    `Good ${hours < 12 ? 'morning' : hours < 18 ? 'afternoon' : 'evening'}, ${currentUser.name.split(' ')[0]}.`;
+}
+
+// ── Habits (still local for now) ─────────────────────────────
 let habits = JSON.parse(localStorage.getItem('cadence-habits')) || [
   { id: 1, name: 'Morning run',       emoji: '🏃', streak: 14, doneToday: false },
   { id: 2, name: 'Read 20 minutes',   emoji: '📚', streak: 6,  doneToday: false },
@@ -21,8 +70,6 @@ let habits = JSON.parse(localStorage.getItem('cadence-habits')) || [
   { id: 4, name: 'Drink 2L water',    emoji: '💧', streak: 3,  doneToday: false },
   { id: 5, name: 'No screens at 9pm', emoji: '🛌', streak: 2,  doneToday: false },
 ];
-
-let xp = parseInt(localStorage.getItem('cadence-xp') || '320');
 
 const aiInsights = [
   { tag: 'Pattern detected',  title: 'You skip workouts on Tuesdays',       body: 'Your completion rate for Morning Run on Tuesdays is 28% — vs 81% on other days. Try shifting it to 7 AM. Your early-morning success rate is 3× higher.' },
@@ -62,7 +109,20 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // ── Habit list ────────────────────────────────────────────────
 function save() { localStorage.setItem('cadence-habits', JSON.stringify(habits)); }
-function saveXP() { localStorage.setItem('cadence-xp', xp); }
+
+async function syncXP(newXp) {
+  if (!currentUser) return;
+  try {
+    const { user } = await api('/api/me/xp', {
+      method: 'PATCH',
+      body: JSON.stringify({ xp: newXp })
+    });
+    currentUser = user;
+    paintUser();
+  } catch (err) {
+    console.error('XP sync failed:', err);
+  }
+}
 
 function updateProgress() {
   const done  = habits.filter(h => h.doneToday).length;
@@ -71,7 +131,6 @@ function updateProgress() {
 
   document.getElementById('progressFill').style.width  = pct + '%';
   document.getElementById('progressLabel').textContent = `${done} / ${total} done`;
-  document.getElementById('xpCount').textContent       = `${xp} XP`;
 }
 
 function renderHabits() {
@@ -93,10 +152,13 @@ function renderHabits() {
       h.doneToday = !h.doneToday;
       h.streak   += h.doneToday ? 1 : -1;
       if (h.streak < 0) h.streak = 0;
-      xp += h.doneToday ? 10 : -10;
-      if (xp < 0) xp = 0;
-      save(); saveXP();
-      renderHabits(); renderCards();
+
+      const delta = h.doneToday ? 10 : -10;
+      const newXp = Math.max(0, (currentUser?.xp ?? 0) + delta);
+      save();
+      renderHabits();
+      renderCards();
+      syncXP(newXp);
     });
     list.appendChild(el);
   });
@@ -201,6 +263,10 @@ const popover = document.getElementById('settingsPopover');
 userBar.addEventListener('click', e => {
   if (e.target.closest('#themeToggle')) return;
   popover.classList.toggle('open');
+  if (popover.classList.contains('open') && currentUser) {
+    document.getElementById('inputDisplayName').value = currentUser.name;
+    document.getElementById('inputEmail').value       = currentUser.email;
+  }
 });
 
 document.addEventListener('click', e => {
@@ -225,28 +291,71 @@ document.querySelectorAll('[data-back]').forEach(btn => {
   btn.addEventListener('click', () => showView(btn.dataset.back));
 });
 
-document.getElementById('saveDisplayName').addEventListener('click', () => {
+function showSettingsError(viewId, message) {
+  const view = document.getElementById(viewId);
+  view.querySelectorAll('.settings-error').forEach(e => e.remove());
+  const err = document.createElement('p');
+  err.className = 'settings-error';
+  err.textContent = message;
+  view.appendChild(err);
+  setTimeout(() => err.remove(), 3000);
+}
+
+document.getElementById('saveDisplayName').addEventListener('click', async () => {
   const val = document.getElementById('inputDisplayName').value.trim();
   if (!val) return;
-  document.getElementById('userName').textContent   = val;
-  document.getElementById('userAvatar').textContent = val.charAt(0).toUpperCase();
-  document.getElementById('greetingTitle').textContent = `Good ${hours < 12 ? 'morning' : hours < 18 ? 'afternoon' : 'evening'}, ${val}.`;
-  showSuccess();
+  try {
+    const { user } = await api('/api/me/name', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: val })
+    });
+    currentUser = user;
+    paintUser();
+    showSuccess();
+  } catch (err) {
+    showSettingsError('settingsDisplayName', err.message);
+  }
 });
 
-document.getElementById('saveEmail').addEventListener('click', () => {
+document.getElementById('saveEmail').addEventListener('click', async () => {
   const val = document.getElementById('inputEmail').value.trim();
   if (!val || !val.includes('@')) return;
-  showSuccess();
+  try {
+    const { user } = await api('/api/me/email', {
+      method: 'PATCH',
+      body: JSON.stringify({ email: val })
+    });
+    currentUser = user;
+    paintUser();
+    showSuccess();
+  } catch (err) {
+    showSettingsError('settingsEmail', err.message);
+  }
 });
 
-document.getElementById('savePassword').addEventListener('click', () => {
-  if (document.getElementById('inputCurrentPass').value !== 'admin') return;
-  if (document.getElementById('inputNewPass').value.length < 4) return;
-  showSuccess();
+document.getElementById('savePassword').addEventListener('click', async () => {
+  const current = document.getElementById('inputCurrentPass').value;
+  const next    = document.getElementById('inputNewPass').value;
+  if (!current || next.length < 8) {
+    showSettingsError('settingsPassword', 'New password needs 8+ characters');
+    return;
+  }
+  try {
+    await api('/api/me/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword: current, newPassword: next })
+    });
+    document.getElementById('inputCurrentPass').value = '';
+    document.getElementById('inputNewPass').value = '';
+    showSuccess();
+  } catch (err) {
+    showSettingsError('settingsPassword', err.message);
+  }
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('cadence-token');
+  localStorage.removeItem('cadence-user');
   window.location.href = 'index.html';
 });
 
@@ -263,3 +372,4 @@ renderHabits();
 renderCards();
 renderInsights();
 renderChart();
+loadUser().catch(err => console.error('Load user failed:', err));

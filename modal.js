@@ -22,8 +22,6 @@ function closeModal() {
   document.body.style.overflow = '';
 }
 
-// ── Triggers ─────────────────────────────────────────────────
-
 document.querySelectorAll('[data-open]').forEach(el => {
   el.addEventListener('click', () => openModal(el.dataset.open));
 });
@@ -74,6 +72,19 @@ function showError(input) {
 
 function clearErrors() {
   modal.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
+  modal.querySelectorAll('.auth-error').forEach(el => el.remove());
+}
+
+function showAuthError(form, message) {
+  form.querySelectorAll('.auth-error').forEach(el => el.remove());
+  const hint = document.createElement('p');
+  hint.className = 'auth-error';
+  hint.textContent = message;
+  form.insertBefore(hint, form.querySelector('.btn-modal'));
+  form.closest('.modal').classList.add('shake');
+  form.closest('.modal').addEventListener('animationend', () => {
+    form.closest('.modal')?.classList.remove('shake');
+  }, { once: true });
 }
 
 function validateEmail(val) {
@@ -82,7 +93,7 @@ function validateEmail(val) {
 
 // ── Sign up submit ────────────────────────────────────────────
 
-signupForm.addEventListener('submit', e => {
+signupForm.addEventListener('submit', async e => {
   e.preventDefault();
   clearErrors();
 
@@ -98,18 +109,35 @@ signupForm.addEventListener('submit', e => {
   if (!valid) return;
 
   const btn = signupForm.querySelector('.btn-modal');
+  const originalText = btn.textContent;
   btn.textContent = 'Creating account…';
   btn.classList.add('loading');
+  btn.disabled = true;
 
-  // Simulated async — replace with real auth call
-  setTimeout(() => {
-    showSuccess('Welcome to Cadence!', 'Your account has been created. Start building your first habit.');
-  }, 1400);
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.value.trim(), email: email.value.trim(), password: pass.value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+    localStorage.setItem('cadence-token', data.token);
+    localStorage.setItem('cadence-user', JSON.stringify(data.user));
+    showSuccess('Welcome to Cadence!', 'Taking you to your dashboard…');
+    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+  } catch (err) {
+    btn.textContent = originalText;
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    showAuthError(signupForm, err.message);
+  }
 });
 
 // ── Sign in submit ────────────────────────────────────────────
 
-signinForm.addEventListener('submit', e => {
+signinForm.addEventListener('submit', async e => {
   e.preventDefault();
   clearErrors();
 
@@ -117,29 +145,37 @@ signinForm.addEventListener('submit', e => {
   const pass  = document.getElementById('si-pass');
   let valid = true;
 
-  if (!email.value.trim()) { showError(email); valid = false; }
+  if (!validateEmail(email.value)) { showError(email); valid = false; }
   if (!pass.value) { showError(pass); valid = false; }
 
   if (!valid) return;
 
-  // Dummy auth check
-  if (email.value.trim() !== 'admin' || pass.value !== 'admin') {
-    showError(email);
-    showError(pass);
-    const hint = signinForm.querySelector('.auth-error') || document.createElement('p');
-    hint.className = 'auth-error';
-    hint.textContent = 'Incorrect email or password.';
-    signinForm.insertBefore(hint, signinForm.querySelector('.btn-modal'));
-    return;
-  }
-
   const btn = signinForm.querySelector('.btn-modal');
+  const originalText = btn.textContent;
   btn.textContent = 'Signing in…';
   btn.classList.add('loading');
+  btn.disabled = true;
 
-  setTimeout(() => {
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value.trim(), password: pass.value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Sign in failed');
+
+    localStorage.setItem('cadence-token', data.token);
+    localStorage.setItem('cadence-user', JSON.stringify(data.user));
     window.location.href = 'dashboard.html';
-  }, 900);
+  } catch (err) {
+    btn.textContent = originalText;
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    showError(email);
+    showError(pass);
+    showAuthError(signinForm, err.message);
+  }
 });
 
 // ── Success screen ────────────────────────────────────────────
@@ -154,5 +190,4 @@ function showSuccess(title, message) {
     </div>
   `;
   document.getElementById('modalClose').addEventListener('click', closeModal);
-  setTimeout(closeModal, 3200);
 }

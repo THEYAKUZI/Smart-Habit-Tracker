@@ -242,6 +242,13 @@ body {
 }
 .settings-save:hover { opacity: 0.85; }
 
+.settings-error {
+  margin: 6px 10px 4px; padding: 8px 10px;
+  background: rgba(176,80,80,0.1); color: #B05050;
+  font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .settings-view--success { align-items: center; padding: 14px 10px; gap: 8px; flex-direction: row; }
 .settings-success-icon {
   width: 24px; height: 24px; background: var(--lime); color: #080A07;

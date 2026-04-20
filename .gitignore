@@ -1,0 +1,5 @@
+server/node_modules/
+server/cadence.db
+server/cadence.db-*
+server/.env
+.env
