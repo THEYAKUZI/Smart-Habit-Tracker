@@ -50,7 +50,7 @@ function paintUser() {
   document.getElementById('userName').textContent   = currentUser.name;
   document.getElementById('userAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
   const handleEl = document.querySelector('.user-handle');
-  if (handleEl) handleEl.textContent = currentUser.email;
+  if (handleEl) handleEl.textContent = currentUser.username ? '@' + currentUser.username : currentUser.email;
 
   const xpIntoLevel = currentUser.xp % 500;
   const pct = Math.min((xpIntoLevel / 500) * 100, 100);

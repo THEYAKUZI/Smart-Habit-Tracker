@@ -91,22 +91,42 @@ function validateEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 }
 
+function validateUsername(val) {
+  return /^[a-z0-9_]{3,20}$/.test(val);
+}
+
+function validatePassword(pw) {
+  if (pw.length < 8) return 'Password needs at least 8 characters';
+  if (!/[a-zA-Z]/.test(pw)) return 'Password needs at least one letter';
+  if (!/[0-9]/.test(pw))    return 'Password needs at least one number';
+  return null;
+}
+
 // ── Sign up submit ────────────────────────────────────────────
 
 signupForm.addEventListener('submit', async e => {
   e.preventDefault();
   clearErrors();
 
-  const name  = document.getElementById('su-name');
-  const email = document.getElementById('su-email');
-  const pass  = document.getElementById('su-pass');
+  const name     = document.getElementById('su-name');
+  const username = document.getElementById('su-username');
+  const email    = document.getElementById('su-email');
+  const pass     = document.getElementById('su-pass');
   let valid = true;
 
   if (!name.value.trim()) { showError(name); valid = false; }
+  if (!validateUsername(username.value.trim().toLowerCase())) { showError(username); valid = false; }
   if (!validateEmail(email.value)) { showError(email); valid = false; }
-  if (pass.value.length < 8) { showError(pass); valid = false; }
 
-  if (!valid) return;
+  const pwErr = validatePassword(pass.value);
+  if (pwErr) { showError(pass); valid = false; }
+
+  if (!valid) {
+    if (pwErr) showAuthError(signupForm, pwErr);
+    else if (!validateUsername(username.value.trim().toLowerCase()))
+      showAuthError(signupForm, 'Username: 3–20 chars (letters, numbers, underscore)');
+    return;
+  }
 
   const btn = signupForm.querySelector('.btn-modal');
   const originalText = btn.textContent;
@@ -118,7 +138,12 @@ signupForm.addEventListener('submit', async e => {
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.value.trim(), email: email.value.trim(), password: pass.value })
+      body: JSON.stringify({
+        name: name.value.trim(),
+        username: username.value.trim().toLowerCase(),
+        email: email.value.trim(),
+        password: pass.value
+      })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
@@ -141,12 +166,12 @@ signinForm.addEventListener('submit', async e => {
   e.preventDefault();
   clearErrors();
 
-  const email = document.getElementById('si-email');
+  const ident = document.getElementById('si-id');
   const pass  = document.getElementById('si-pass');
   let valid = true;
 
-  if (!validateEmail(email.value)) { showError(email); valid = false; }
-  if (!pass.value) { showError(pass); valid = false; }
+  if (!ident.value.trim()) { showError(ident); valid = false; }
+  if (!pass.value)         { showError(pass);  valid = false; }
 
   if (!valid) return;
 
@@ -160,7 +185,7 @@ signinForm.addEventListener('submit', async e => {
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value.trim(), password: pass.value })
+      body: JSON.stringify({ identifier: ident.value.trim(), password: pass.value })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Sign in failed');
@@ -172,7 +197,7 @@ signinForm.addEventListener('submit', async e => {
     btn.textContent = originalText;
     btn.classList.remove('loading');
     btn.disabled = false;
-    showError(email);
+    showError(ident);
     showError(pass);
     showAuthError(signinForm, err.message);
   }
