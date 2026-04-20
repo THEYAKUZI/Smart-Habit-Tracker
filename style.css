@@ -173,17 +173,17 @@ body {
 .nav-link-btn {
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--ink);
-  background: none;
-  border: 1px solid var(--mid);
+  color: #E4E8DF;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.2);
   cursor: pointer;
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 9px 20px;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
-.nav-link-btn:hover { border-color: var(--ink); background: rgba(255,255,255,0.05); }
+.nav-link-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
 
 .nav-cta {
   font-size: 0.8rem;
