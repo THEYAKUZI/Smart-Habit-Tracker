@@ -162,19 +162,20 @@ body {
 
 .nav-links a,
 .nav-link-btn {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--mid);
-  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
   background: none;
-  border: none;
+  border: 1px solid var(--rule);
   cursor: pointer;
   font-family: 'Space Grotesk', sans-serif;
-  transition: color 0.15s;
-  padding: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 9px 20px;
+  transition: border-color 0.15s, color 0.15s;
 }
-.nav-links a:hover,
-.nav-link-btn:hover { color: var(--ink); }
+.nav-links a:hover { color: var(--ink); }
+.nav-link-btn:hover { border-color: var(--mid); color: var(--ink); }
 
 .nav-cta {
   font-size: 0.8rem;
