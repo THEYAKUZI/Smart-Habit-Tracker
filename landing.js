@@ -57,25 +57,22 @@ const countObserver = new IntersectionObserver((entries) => {
 const strip = document.querySelector('.reveal-strip');
 if (strip) countObserver.observe(strip);
 
-// ── Cursor glow on hero ───────────────────────────────────────
-const hero = document.querySelector('.hero');
-if (hero) {
-  const glow = document.createElement('div');
-  glow.className = 'cursor-glow';
-  hero.appendChild(glow);
+// ── Hero desc slideshow ───────────────────────────────────────
+const descLines = document.querySelectorAll('.desc-line');
+let current = 0;
 
-  hero.addEventListener('mousemove', e => {
-    const rect = hero.getBoundingClientRect();
-    glow.style.left = (e.clientX - rect.left) + 'px';
-    glow.style.top  = (e.clientY - rect.top) + 'px';
-  });
+if (descLines.length) {
+  setInterval(() => {
+    descLines[current].classList.remove('active');
+    descLines[current].classList.add('exit');
 
-  hero.addEventListener('mouseleave', () => {
-    glow.style.opacity = '0';
-  });
-  hero.addEventListener('mouseenter', () => {
-    glow.style.opacity = '1';
-  });
+    const prev = current;
+    current = (current + 1) % descLines.length;
+
+    descLines[current].classList.add('active');
+
+    setTimeout(() => descLines[prev].classList.remove('exit'), 400);
+  }, 2800);
 }
 
 // ── Feature rows hover line ───────────────────────────────────

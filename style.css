@@ -483,20 +483,38 @@ body {
 .footer a { color: var(--mid); text-decoration: none; }
 .footer a:hover { color: var(--ink); }
 
-/* ── Cursor glow ── */
-.cursor-glow {
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(185,242,60,0.06) 0%, transparent 65%);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  transition: opacity 0.3s;
-  z-index: 0;
+/* ── Hero desc slideshow ── */
+.hero-desc {
+  position: relative;
+  height: 1.75em;
+  overflow: hidden;
 }
 
-.hero-main, .hero-top { position: relative; z-index: 1; }
+.desc-line {
+  position: absolute;
+  top: 0; left: 0;
+  font-size: 1rem;
+  color: var(--mid);
+  line-height: 1.75;
+  font-weight: 400;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  pointer-events: none;
+}
+
+.desc-line.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.desc-line.exit {
+  opacity: 0;
+  transform: translateY(-12px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
