@@ -142,6 +142,6 @@ app.patch('/api/me/xp', auth, (req, res) => {
   res.json({ user: userPublic(user) });
 });
 
-app.listen(PORT, () => {
-  console.log(`Cadence running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Cadence running on port ${PORT}`);
 });

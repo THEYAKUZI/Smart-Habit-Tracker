@@ -150,7 +150,11 @@ body {
   flex-shrink: 0;
 }
 
-.user-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.user-info { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
+.user-name, .user-handle {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
 .user-name   { font-size: 0.8rem; font-weight: 600; color: #E4E8DF; }
 .user-handle { font-size: 0.68rem; color: #434840; }
 
