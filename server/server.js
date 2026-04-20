@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { Resend } from 'resend';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -27,9 +28,9 @@ db.exec(`
   );
 `);
 
-// Add username column for existing DBs
-const cols = db.prepare('PRAGMA table_info(users)').all();
-if (!cols.some(c => c.name === 'username')) {
+// Migrations
+const cols = () => db.prepare('PRAGMA table_info(users)').all();
+if (!cols().some(c => c.name === 'username')) {
   db.exec('ALTER TABLE users ADD COLUMN username TEXT');
   const rows = db.prepare('SELECT id, name FROM users').all();
   const upd = db.prepare('UPDATE users SET username = ? WHERE id = ?');
@@ -38,6 +39,44 @@ if (!cols.some(c => c.name === 'username')) {
     upd.run(base, r.id);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)');
+}
+if (!cols().some(c => c.name === 'verified')) {
+  db.exec('ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 1');
+}
+if (!cols().some(c => c.name === 'verify_code')) {
+  db.exec('ALTER TABLE users ADD COLUMN verify_code TEXT');
+  db.exec('ALTER TABLE users ADD COLUMN verify_code_expires INTEGER');
+}
+
+// Resend
+const resend    = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const FROM_MAIL = process.env.RESEND_FROM    || 'Cadence <onboarding@resend.dev>';
+if (!resend) console.warn('[warn] RESEND_API_KEY not set — codes will print to console');
+
+function genCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendVerifyEmail(to, name, code) {
+  if (!resend) {
+    console.log(`[dev] verification code for ${to}: ${code}`);
+    return;
+  }
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:40px auto;padding:32px;background:#0E100D;color:#E4E8DF;border:1px solid #1C1F19">
+      <h1 style="font-size:20px;margin:0 0 8px;letter-spacing:0.04em">Cadence</h1>
+      <p style="color:#888E85;margin:0 0 24px;font-size:14px">Verify your email to finish signing up.</p>
+      <p style="font-size:15px;margin:0 0 16px">Hi ${name}, your code is:</p>
+      <div style="font-size:34px;font-weight:700;letter-spacing:0.3em;color:#B9F23C;padding:16px;background:#080A07;text-align:center;margin:0 0 20px">${code}</div>
+      <p style="font-size:13px;color:#535950;margin:0">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+    </div>
+  `;
+  try {
+    await resend.emails.send({ from: FROM_MAIL, to, subject: 'Your Cadence verification code', html });
+  } catch (err) {
+    console.error('[resend] failed:', err?.message || err);
+    console.log(`[fallback] code for ${to}: ${code}`);
+  }
 }
 
 // ── Validation helpers ────────────────────────────────────────
@@ -102,12 +141,44 @@ app.post('/api/register', async (req, res) => {
   }
 
   const hash = await bcrypt.hash(password, 10);
-  const info = db.prepare(
-    'INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)'
-  ).run(mail, uname, hash, name.trim());
+  const code = genCode();
+  const expires = Date.now() + 10 * 60 * 1000;
+  db.prepare(
+    'INSERT INTO users (email, username, password_hash, name, verified, verify_code, verify_code_expires) VALUES (?, ?, ?, ?, 0, ?, ?)'
+  ).run(mail, uname, hash, name.trim(), code, expires);
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  res.json({ token: issueToken(user), user: userPublic(user) });
+  await sendVerifyEmail(mail, name.trim(), code);
+  res.json({ pendingVerification: true, email: mail });
+});
+
+app.post('/api/verify-email', async (req, res) => {
+  const { email, code } = req.body || {};
+  if (!email || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
+  if (!user) return res.status(404).json({ error: 'Account not found' });
+  if (user.verified) return res.status(400).json({ error: 'Already verified' });
+  if (!user.verify_code || !user.verify_code_expires) return res.status(400).json({ error: 'No code pending — request a new one' });
+  if (Date.now() > user.verify_code_expires) return res.status(400).json({ error: 'Code expired — request a new one' });
+  if (String(code).trim() !== user.verify_code) return res.status(400).json({ error: 'Incorrect code' });
+
+  db.prepare('UPDATE users SET verified = 1, verify_code = NULL, verify_code_expires = NULL WHERE id = ?').run(user.id);
+  const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  res.json({ token: issueToken(fresh), user: userPublic(fresh) });
+});
+
+app.post('/api/resend-code', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
+  if (user && !user.verified) {
+    const code = genCode();
+    const expires = Date.now() + 10 * 60 * 1000;
+    db.prepare('UPDATE users SET verify_code = ?, verify_code_expires = ? WHERE id = ?').run(code, expires, user.id);
+    await sendVerifyEmail(user.email, user.name, code);
+  }
+  res.json({ ok: true });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -122,6 +193,10 @@ app.post('/api/login', async (req, res) => {
 
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Incorrect credentials' });
+
+  if (!user.verified) {
+    return res.status(403).json({ error: 'Email not verified', needsVerification: true, email: user.email });
+  }
 
   res.json({ token: issueToken(user), user: userPublic(user) });
 });

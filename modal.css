@@ -150,3 +150,32 @@
   letter-spacing: 0.04em; color: #E4E8DF; margin-bottom: 8px;
 }
 .modal-success p { font-size: 0.85rem; color: #535950; line-height: 1.6; }
+
+.verify-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.7rem; letter-spacing: 0.04em;
+  color: #E4E8DF; margin-bottom: 8px;
+}
+.verify-sub {
+  font-size: 0.82rem; color: #888E85;
+  line-height: 1.6; margin-bottom: 24px;
+}
+.verify-sub strong { color: #E4E8DF; font-weight: 600; }
+
+#verify-code {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.3rem; letter-spacing: 0.4em;
+  text-align: center;
+}
+
+.verify-resend {
+  background: none; border: none;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.72rem; font-weight: 700;
+  color: #888E85; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-top: 4px; padding: 8px;
+  transition: color 0.15s;
+}
+.verify-resend:hover:not(:disabled) { color: #B9F23C; }
+.verify-resend:disabled { cursor: default; opacity: 0.5; }

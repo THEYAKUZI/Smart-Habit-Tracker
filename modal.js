@@ -148,10 +148,13 @@ signupForm.addEventListener('submit', async e => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
 
+    if (data.pendingVerification) {
+      showVerifyUI(data.email);
+      return;
+    }
     localStorage.setItem('cadence-token', data.token);
     localStorage.setItem('cadence-user', JSON.stringify(data.user));
-    showSuccess('Welcome to Cadence!', 'Taking you to your dashboard…');
-    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+    window.location.href = 'dashboard.html';
   } catch (err) {
     btn.textContent = originalText;
     btn.classList.remove('loading');
@@ -188,6 +191,15 @@ signinForm.addEventListener('submit', async e => {
       body: JSON.stringify({ identifier: ident.value.trim(), password: pass.value })
     });
     const data = await res.json();
+    if (res.status === 403 && data.needsVerification) {
+      await fetch('/api/resend-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email })
+      });
+      showVerifyUI(data.email);
+      return;
+    }
     if (!res.ok) throw new Error(data.error || 'Sign in failed');
 
     localStorage.setItem('cadence-token', data.token);
@@ -215,4 +227,84 @@ function showSuccess(title, message) {
     </div>
   `;
   document.getElementById('modalClose').addEventListener('click', closeModal);
+}
+
+// ── Verify email ──────────────────────────────────────────────
+
+function showVerifyUI(email) {
+  modal.innerHTML = `
+    <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+    <div class="modal-logo">Cadence</div>
+    <h3 class="verify-title">Check your email</h3>
+    <p class="verify-sub">We sent a 6-digit code to<br><strong>${email}</strong></p>
+    <form class="modal-form" id="verifyForm" novalidate>
+      <div class="field">
+        <label for="verify-code">Verification code</label>
+        <input type="text" id="verify-code" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+      </div>
+      <button type="submit" class="btn-modal">Verify</button>
+      <button type="button" class="verify-resend" id="verifyResend">Didn't get it? Resend code</button>
+    </form>
+  `;
+
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+
+  const input = document.getElementById('verify-code');
+  input.focus();
+  input.addEventListener('input', () => {
+    input.value = input.value.replace(/\D/g, '');
+    if (input.value.length === 6) document.getElementById('verifyForm').requestSubmit();
+  });
+
+  document.getElementById('verifyForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const code = input.value.trim();
+    if (code.length !== 6) { showError(input); return; }
+
+    const btn = e.target.querySelector('.btn-modal');
+    btn.textContent = 'Verifying…';
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification failed');
+
+      localStorage.setItem('cadence-token', data.token);
+      localStorage.setItem('cadence-user', JSON.stringify(data.user));
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      btn.textContent = 'Verify';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+      showError(input);
+      showAuthError(document.getElementById('verifyForm'), err.message);
+    }
+  });
+
+  document.getElementById('verifyResend').addEventListener('click', async () => {
+    const link = document.getElementById('verifyResend');
+    link.textContent = 'Sending…';
+    link.disabled = true;
+    try {
+      await fetch('/api/resend-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      link.textContent = 'New code sent';
+      setTimeout(() => {
+        link.textContent = "Didn't get it? Resend code";
+        link.disabled = false;
+      }, 3000);
+    } catch {
+      link.textContent = "Didn't get it? Resend code";
+      link.disabled = false;
+    }
+  });
 }
