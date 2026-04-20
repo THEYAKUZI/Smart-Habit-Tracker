@@ -175,15 +175,15 @@ body {
   font-weight: 700;
   color: var(--ink);
   background: none;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--mid);
   cursor: pointer;
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 9px 20px;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
-.nav-link-btn:hover { border-color: var(--mid); }
+.nav-link-btn:hover { border-color: var(--ink); background: rgba(255,255,255,0.05); }
 
 .nav-cta {
   font-size: 0.8rem;
