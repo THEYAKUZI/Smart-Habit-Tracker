@@ -1,5 +1,91 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Keyframes ── */
+@keyframes heroLineIn {
+  from { opacity: 0; transform: translateY(60px); clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; transform: translateY(0);    clip-path: inset(0 0 0% 0); }
+}
+
+@keyframes hollowOut {
+  0%   { color: var(--ink); -webkit-text-stroke: 0px transparent; }
+  100% { color: transparent; -webkit-text-stroke: 2px var(--ink); }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeSlideLeft {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes stripIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Hero title line stagger ── */
+.tl {
+  display: block;
+  opacity: 0;
+  animation: heroLineIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.tl:nth-child(1) { animation-delay: 0.05s; }
+.tl:nth-child(2) { animation-delay: 0.18s; }
+.tl:nth-child(3) { animation-delay: 0.31s; }
+.tl:nth-child(4) { animation-delay: 0.44s; }
+
+.tl.outline {
+  animation: heroLineIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.18s forwards,
+             hollowOut  0.6s ease                           0.95s forwards;
+}
+
+/* ── Hero right fade in ── */
+.hero-right {
+  animation: fadeSlideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}
+
+/* ── Scroll reveal base states ── */
+.reveal-up {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0s),
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0s);
+}
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-32px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-right {
+  opacity: 0;
+  transform: translateX(32px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.1s,
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.1s;
+}
+.reveal-strip {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* ── Visible state (added by JS) ── */
+.reveal-up.in,
+.reveal-left.in,
+.reveal-right.in,
+.reveal-strip.in {
+  opacity: 1;
+  transform: translate(0);
+}
+
 :root {
   --bg:     #0C0E0B;
   --surface:#131610;
@@ -148,10 +234,8 @@ body {
   color: var(--ink);
 }
 
-.hero-title .outline {
-  -webkit-text-stroke: 2px var(--ink);
-  color: transparent;
-}
+/* .outline starts solid; hollowOut animation transitions it to stroked */
+.hero-title .outline { color: var(--ink); }
 
 .hero-right {
   display: flex;
@@ -398,6 +482,21 @@ body {
 .footer .logo { font-size: 1.2rem; color: var(--mid); }
 .footer a { color: var(--mid); text-decoration: none; }
 .footer a:hover { color: var(--ink); }
+
+/* ── Cursor glow ── */
+.cursor-glow {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(185,242,60,0.06) 0%, transparent 65%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 0;
+}
+
+.hero-main, .hero-top { position: relative; z-index: 1; }
 
 /* ── Responsive ── */
 @media (max-width: 900px) {

@@ -32,10 +32,10 @@
   <section class="hero">
     <div class="hero-main">
       <h1 class="hero-title">
-        Stop<br>
-        <span class="outline">planning.</span><br>
-        Start<br>
-        doing.
+        <span class="tl">Stop</span>
+        <span class="tl outline">planning.</span>
+        <span class="tl">Start</span>
+        <span class="tl">doing.</span>
       </h1>
       <div class="hero-right">
         <p class="hero-desc">Cadence tracks your habits, spots when you're slipping, and tells you exactly what to adjust — before you give up.</p>
@@ -46,35 +46,35 @@
   </section>
 
   <!-- NUMBERS STRIP -->
-  <div class="numbers-strip">
+  <div class="numbers-strip reveal-strip">
     <div class="strip-stat">
-      <span class="strip-num">14</span>
+      <span class="strip-num count-up" data-target="14" data-suffix="">14</span>
       <span class="strip-label">avg. streak days</span>
     </div>
     <div class="strip-divider"></div>
     <div class="strip-stat">
-      <span class="strip-num">91%</span>
+      <span class="strip-num count-up" data-target="91" data-suffix="%">91%</span>
       <span class="strip-label">goal completion rate</span>
     </div>
     <div class="strip-divider"></div>
     <div class="strip-stat">
-      <span class="strip-num">3×</span>
+      <span class="strip-num count-up" data-target="3" data-suffix="×">3×</span>
       <span class="strip-label">better with AI nudges</span>
     </div>
     <div class="strip-divider"></div>
     <div class="strip-stat">
-      <span class="strip-num">8m</span>
+      <span class="strip-num count-up" data-target="8" data-suffix="m">8m</span>
       <span class="strip-label">daily check-in</span>
     </div>
   </div>
 
   <!-- WHAT -->
   <section class="what" id="how">
-    <div class="what-left">
+    <div class="what-left reveal-left">
       <p class="section-label">What it actually is</p>
       <h2>Most habit apps are just fancy checklists.</h2>
     </div>
-    <div class="what-right">
+    <div class="what-right reveal-right">
       <p>They track what you do. They don't think. Cadence uses AI to find patterns in your data — when you're most likely to skip, what triggers your best days, which goals are set too high. Then it acts on that before you fall off.</p>
       <p>Not generic advice. Not another notification you'll ignore. Specific, timed, personal.</p>
     </div>
@@ -82,24 +82,24 @@
 
   <!-- HOW IT WORKS -->
   <section class="how" id="how-it-works">
-    <p class="section-label">How it works</p>
+    <p class="section-label reveal-up">How it works</p>
     <div class="how-steps">
-      <div class="how-step">
+      <div class="how-step reveal-up" style="--delay:0s">
         <span class="how-num">01</span>
         <h3>Set your habits</h3>
         <p>Add anything — running, reading, sleep. Cadence breaks them into daily actions that fit your actual schedule.</p>
       </div>
-      <div class="how-step">
+      <div class="how-step reveal-up" style="--delay:0.1s">
         <span class="how-num">02</span>
         <h3>Check in daily</h3>
         <p>Eight minutes. Tick off what you did. Wearables sync automatically for workouts and sleep.</p>
       </div>
-      <div class="how-step">
+      <div class="how-step reveal-up" style="--delay:0.2s">
         <span class="how-num">03</span>
         <h3>AI adapts for you</h3>
         <p>After a few days, Cadence starts delivering insights that are actually about you — not a generic template.</p>
       </div>
-      <div class="how-step">
+      <div class="how-step reveal-up" style="--delay:0.3s">
         <span class="how-num">04</span>
         <h3>Level up</h3>
         <p>Earn XP, hit streaks, unlock achievements. Consistency becomes a game — one you can actually win.</p>
@@ -155,9 +155,6 @@
   </div>
 
   <script src="modal.js"></script>
-  <script>
-    const t = localStorage.getItem('cadence-theme');
-    if (t) document.documentElement.dataset.theme = t;
-  </script>
+  <script src="landing.js"></script>
 </body>
 </html>
