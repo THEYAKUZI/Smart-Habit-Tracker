@@ -123,12 +123,6 @@
 }
 .btn-oauth:hover { border-color: #434840; color: #E4E8DF; }
 
-.nav-link-btn {
-  background: none; border: none; font-size: 0.85rem; color: #535950;
-  font-weight: 500; cursor: pointer; font-family: 'Space Grotesk', system-ui, sans-serif;
-  transition: color 0.15s; padding: 0;
-}
-.nav-link-btn:hover { color: #E4E8DF; }
 
 .auth-error {
   font-size: 0.75rem; color: #B05050; font-weight: 600;
