@@ -5,13 +5,14 @@ import jwt from 'jsonwebtoken';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { Resend } from 'resend';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
-const PORT = process.env.PORT || 3000;
+const JWT_SECRET  = process.env.JWT_SECRET || 'dev-secret-change-me';
+const PORT        = process.env.PORT || 3000;
+const GROQ_KEY    = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL  = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 // ── DB ────────────────────────────────────────────────────────
 const db = new Database(path.join(__dirname, 'cadence.db'));
@@ -28,9 +29,9 @@ db.exec(`
   );
 `);
 
-// Migrations
-const cols = () => db.prepare('PRAGMA table_info(users)').all();
-if (!cols().some(c => c.name === 'username')) {
+// Add username column for existing DBs
+const cols = db.prepare('PRAGMA table_info(users)').all();
+if (!cols.some(c => c.name === 'username')) {
   db.exec('ALTER TABLE users ADD COLUMN username TEXT');
   const rows = db.prepare('SELECT id, name FROM users').all();
   const upd = db.prepare('UPDATE users SET username = ? WHERE id = ?');
@@ -40,43 +41,9 @@ if (!cols().some(c => c.name === 'username')) {
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)');
 }
-if (!cols().some(c => c.name === 'verified')) {
-  db.exec('ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 1');
-}
-if (!cols().some(c => c.name === 'verify_code')) {
-  db.exec('ALTER TABLE users ADD COLUMN verify_code TEXT');
-  db.exec('ALTER TABLE users ADD COLUMN verify_code_expires INTEGER');
-}
 
-// Resend
-const resend    = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const FROM_MAIL = process.env.RESEND_FROM    || 'Cadence <onboarding@resend.dev>';
-if (!resend) console.warn('[warn] RESEND_API_KEY not set — codes will print to console');
-
-function genCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-async function sendVerifyEmail(to, name, code) {
-  if (!resend) {
-    console.log(`[dev] verification code for ${to}: ${code}`);
-    return;
-  }
-  const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:40px auto;padding:32px;background:#0E100D;color:#E4E8DF;border:1px solid #1C1F19">
-      <h1 style="font-size:20px;margin:0 0 8px;letter-spacing:0.04em">Cadence</h1>
-      <p style="color:#888E85;margin:0 0 24px;font-size:14px">Verify your email to finish signing up.</p>
-      <p style="font-size:15px;margin:0 0 16px">Hi ${name}, your code is:</p>
-      <div style="font-size:34px;font-weight:700;letter-spacing:0.3em;color:#B9F23C;padding:16px;background:#080A07;text-align:center;margin:0 0 20px">${code}</div>
-      <p style="font-size:13px;color:#535950;margin:0">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
-    </div>
-  `;
-  try {
-    await resend.emails.send({ from: FROM_MAIL, to, subject: 'Your Cadence verification code', html });
-  } catch (err) {
-    console.error('[resend] failed:', err?.message || err);
-    console.log(`[fallback] code for ${to}: ${code}`);
-  }
+if (!cols.some(c => c.name === 'avatar')) {
+  db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
 }
 
 // ── Validation helpers ────────────────────────────────────────
@@ -109,7 +76,14 @@ function auth(req, res, next) {
 }
 
 function userPublic(row) {
-  return { id: row.id, email: row.email, username: row.username, name: row.name, level: row.level, xp: row.xp };
+  let avatar = null;
+  if (row.avatar) {
+    try { avatar = JSON.parse(row.avatar); } catch {}
+  }
+  return {
+    id: row.id, email: row.email, username: row.username, name: row.name,
+    level: row.level, xp: row.xp, avatar
+  };
 }
 
 function issueToken(user) {
@@ -141,44 +115,12 @@ app.post('/api/register', async (req, res) => {
   }
 
   const hash = await bcrypt.hash(password, 10);
-  const code = genCode();
-  const expires = Date.now() + 10 * 60 * 1000;
-  db.prepare(
-    'INSERT INTO users (email, username, password_hash, name, verified, verify_code, verify_code_expires) VALUES (?, ?, ?, ?, 0, ?, ?)'
-  ).run(mail, uname, hash, name.trim(), code, expires);
+  const info = db.prepare(
+    'INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)'
+  ).run(mail, uname, hash, name.trim());
 
-  await sendVerifyEmail(mail, name.trim(), code);
-  res.json({ pendingVerification: true, email: mail });
-});
-
-app.post('/api/verify-email', async (req, res) => {
-  const { email, code } = req.body || {};
-  if (!email || !code) return res.status(400).json({ error: 'Missing fields' });
-
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
-  if (!user) return res.status(404).json({ error: 'Account not found' });
-  if (user.verified) return res.status(400).json({ error: 'Already verified' });
-  if (!user.verify_code || !user.verify_code_expires) return res.status(400).json({ error: 'No code pending — request a new one' });
-  if (Date.now() > user.verify_code_expires) return res.status(400).json({ error: 'Code expired — request a new one' });
-  if (String(code).trim() !== user.verify_code) return res.status(400).json({ error: 'Incorrect code' });
-
-  db.prepare('UPDATE users SET verified = 1, verify_code = NULL, verify_code_expires = NULL WHERE id = ?').run(user.id);
-  const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-  res.json({ token: issueToken(fresh), user: userPublic(fresh) });
-});
-
-app.post('/api/resend-code', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'Missing email' });
-
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase());
-  if (user && !user.verified) {
-    const code = genCode();
-    const expires = Date.now() + 10 * 60 * 1000;
-    db.prepare('UPDATE users SET verify_code = ?, verify_code_expires = ? WHERE id = ?').run(code, expires, user.id);
-    await sendVerifyEmail(user.email, user.name, code);
-  }
-  res.json({ ok: true });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  res.json({ token: issueToken(user), user: userPublic(user) });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -193,10 +135,6 @@ app.post('/api/login', async (req, res) => {
 
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Incorrect credentials' });
-
-  if (!user.verified) {
-    return res.status(403).json({ error: 'Email not verified', needsVerification: true, email: user.email });
-  }
 
   res.json({ token: issueToken(user), user: userPublic(user) });
 });
@@ -245,6 +183,29 @@ app.patch('/api/me/password', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/leaderboard', auth, (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, username, name, level, xp, avatar FROM users ORDER BY xp DESC, id ASC LIMIT 50'
+  ).all().map(r => ({
+    ...r,
+    avatar: r.avatar ? (() => { try { return JSON.parse(r.avatar); } catch { return null; } })() : null
+  }));
+  res.json({ users: rows, me: req.user.uid });
+});
+
+app.patch('/api/me/avatar', auth, (req, res) => {
+  const { avatar } = req.body || {};
+  if (!avatar || typeof avatar !== 'object') return res.status(400).json({ error: 'Invalid avatar' });
+  const allowed = ['bg','hair','hairColor','outfit','skin'];
+  const clean = {};
+  for (const k of allowed) {
+    if (typeof avatar[k] === 'string' && avatar[k].length < 20) clean[k] = avatar[k];
+  }
+  db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(JSON.stringify(clean), req.user.uid);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.uid);
+  res.json({ user: userPublic(user) });
+});
+
 app.patch('/api/me/xp', auth, (req, res) => {
   const { xp } = req.body || {};
   if (typeof xp !== 'number' || xp < 0) return res.status(400).json({ error: 'Invalid xp' });
@@ -254,6 +215,335 @@ app.patch('/api/me/xp', auth, (req, res) => {
   res.json({ user: userPublic(user) });
 });
 
+// ── AI insights (rule-based detection + Groq phrasing) ───────
+const DAYNAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYNAMES_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const BUCKET_LABELS = ['night(0-6)','morning(6-12)','afternoon(12-18)','evening(18-24)'];
+const BUCKET_SHORT  = ['night','morning','afternoon','evening'];
+
+function summarizeForAI(habits, checkins) {
+  const now = Date.now();
+  const DAY = 86400000;
+  const habitIds = new Set((habits || []).map(h => h.id));
+  const recent = (checkins || []).filter(c => {
+    if (!habitIds.has(c.habitId)) return false;
+    const t = new Date(c.ts).getTime();
+    return Number.isFinite(t) && now - t <= 30 * DAY;
+  });
+
+  const byHabit = {};
+  for (const c of recent) (byHabit[c.habitId] ||= []).push(c);
+
+  const habitStats = (habits || []).map(h => {
+    const his = byHabit[h.id] || [];
+    const weekday = [0,0,0,0,0,0,0];
+    const bucket  = [0,0,0,0];
+    const dates   = new Set();
+    for (const c of his) {
+      const d = new Date(c.ts);
+      weekday[d.getDay()]++;
+      const hh = d.getHours();
+      bucket[hh < 6 ? 0 : hh < 12 ? 1 : hh < 18 ? 2 : 3]++;
+      dates.add(d.toISOString().slice(0, 10));
+    }
+    const sched = h.days || [0,1,2,3,4,5,6];
+    let scheduledDays = 0;
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(now - i * DAY);
+      if (sched.includes(d.getDay())) scheduledDays++;
+    }
+    return {
+      id: h.id,
+      name: h.name,
+      emoji: h.emoji,
+      current_streak: h.streak || 0,
+      scheduled_day_indices: sched,
+      scheduled_days: sched.map(d => DAYNAMES[d]),
+      checkins_last_30: his.length,
+      unique_days_done_last_30: dates.size,
+      scheduled_days_last_30: scheduledDays,
+      completion_rate_pct: scheduledDays ? Math.round((dates.size / scheduledDays) * 100) : null,
+      checkins_by_weekday: Object.fromEntries(DAYNAMES.map((n, i) => [n, weekday[i]])),
+      checkins_by_time: Object.fromEntries(BUCKET_LABELS.map((n, i) => [n, bucket[i]])),
+    };
+  });
+
+  return {
+    today: new Date().toISOString().slice(0, 10),
+    habit_count: (habits || []).length,
+    total_checkins_last_30: recent.length,
+    habits: habitStats,
+  };
+}
+
+// Detect patterns deterministically — the "what" to talk about.
+function detectPatterns(summary) {
+  const patterns = [];
+
+  if (summary.habit_count === 0) {
+    patterns.push({ type: 'no_habits' });
+    return patterns;
+  }
+
+  if (summary.total_checkins_last_30 < 3) {
+    patterns.push({ type: 'sparse', total_checkins: summary.total_checkins_last_30, habit_count: summary.habit_count });
+    return patterns;
+  }
+
+  for (const h of summary.habits) {
+    if (h.checkins_last_30 === 0) continue;
+
+    // Time-of-day skew: one bucket accounts for ≥60% of check-ins (min 3)
+    const byBucket = BUCKET_SHORT.map((name, i) => ({ name, count: h.checkins_by_time[BUCKET_LABELS[i]] || 0 }));
+    byBucket.sort((a, b) => b.count - a.count);
+    const top = byBucket[0];
+    if (top.count >= 3 && top.count >= h.checkins_last_30 * 0.6 && h.checkins_last_30 >= 4) {
+      patterns.push({
+        type: 'time_of_day',
+        habit: h.name, emoji: h.emoji,
+        bucket: top.name,
+        bucket_count: top.count,
+        total_checkins: h.checkins_last_30
+      });
+    }
+
+    // Weekday slump: a scheduled weekday has ≤40% of the avg (and avg ≥ 2)
+    if (h.scheduled_days.length >= 3) {
+      const hits = h.scheduled_days.map(d => ({ day: d, n: h.checkins_by_weekday[d] || 0 }));
+      hits.sort((a, b) => a.n - b.n);
+      const avg = hits.reduce((s, x) => s + x.n, 0) / hits.length;
+      const worst = hits[0];
+      if (avg >= 2 && worst.n <= Math.floor(avg * 0.4) && worst.n <= 1) {
+        const dayIdx = DAYNAMES.indexOf(worst.day);
+        patterns.push({
+          type: 'weekday_slump',
+          habit: h.name, emoji: h.emoji,
+          weekday: DAYNAMES_LONG[dayIdx] || worst.day,
+          weekday_hits: worst.n,
+          avg_per_scheduled_day: Math.round(avg * 10) / 10
+        });
+      }
+    }
+
+    // Consistent: completion ≥ 80% with ≥10 scheduled days
+    if (h.completion_rate_pct !== null && h.completion_rate_pct >= 80 && h.scheduled_days_last_30 >= 10) {
+      patterns.push({
+        type: 'consistent',
+        habit: h.name, emoji: h.emoji,
+        completion_rate_pct: h.completion_rate_pct,
+        days_done: h.unique_days_done_last_30,
+        days_scheduled: h.scheduled_days_last_30
+      });
+    }
+
+    // Adapt frequency: missing too often → suggest dropping to days they actually do it
+    let adaptedThisHabit = false;
+    if (h.scheduled_day_indices.length > 1
+        && h.completion_rate_pct !== null
+        && h.completion_rate_pct <= 40
+        && h.scheduled_days_last_30 >= 7) {
+      const successDays = [];
+      DAYNAMES.forEach((d, i) => {
+        if ((h.checkins_by_weekday[d] || 0) > 0) successDays.push(i);
+      });
+      if (successDays.length && successDays.length < h.scheduled_day_indices.length) {
+        patterns.push({
+          type: 'adapt_frequency',
+          habit_id: h.id,
+          habit: h.name, emoji: h.emoji,
+          completion_rate_pct: h.completion_rate_pct,
+          days_done: h.unique_days_done_last_30,
+          days_scheduled: h.scheduled_days_last_30,
+          current_freq_count: h.scheduled_day_indices.length,
+          suggested_days: successDays,
+          suggested_days_labels: successDays.map(i => DAYNAMES_LONG[i]),
+        });
+        adaptedThisHabit = true;
+      }
+    }
+
+    // Struggling: completion ≤ 30% with ≥7 scheduled days (only if no adapt suggestion)
+    if (!adaptedThisHabit && h.completion_rate_pct !== null && h.completion_rate_pct <= 30 && h.scheduled_days_last_30 >= 7) {
+      patterns.push({
+        type: 'struggling',
+        habit: h.name, emoji: h.emoji,
+        completion_rate_pct: h.completion_rate_pct,
+        days_done: h.unique_days_done_last_30,
+        days_scheduled: h.scheduled_days_last_30
+      });
+    }
+
+    // Active streak ≥ 7 days
+    if (h.current_streak >= 7) {
+      patterns.push({
+        type: 'streak',
+        habit: h.name, emoji: h.emoji,
+        streak_days: h.current_streak
+      });
+    }
+  }
+
+  // Best overall day: day with ≥1.5× average count and ≥4 check-ins
+  const overall = [0,0,0,0,0,0,0];
+  for (const h of summary.habits) {
+    DAYNAMES.forEach((d, i) => { overall[i] += h.checkins_by_weekday[d] || 0; });
+  }
+  const dailyAvg = overall.reduce((s, x) => s + x, 0) / 7;
+  const maxIdx = overall.indexOf(Math.max(...overall));
+  if (overall[maxIdx] >= 4 && overall[maxIdx] >= dailyAvg * 1.5) {
+    patterns.push({
+      type: 'best_day',
+      weekday: DAYNAMES_LONG[maxIdx],
+      count: overall[maxIdx],
+      daily_avg: Math.round(dailyAvg * 10) / 10
+    });
+  }
+
+  // Nothing specific caught — give a general warming-up note
+  if (patterns.length === 0) {
+    patterns.push({
+      type: 'general',
+      total_checkins: summary.total_checkins_last_30,
+      habit_count: summary.habit_count
+    });
+  }
+
+  // Actionable / attention-grabbing patterns first; positive observations after.
+  const PRIORITY = {
+    adapt_frequency: 0, struggling: 1, weekday_slump: 2,
+    streak: 3, time_of_day: 4, consistent: 5, best_day: 6,
+    sparse: 7, general: 8, no_habits: 9,
+  };
+  patterns.sort((a, b) => (PRIORITY[a.type] ?? 99) - (PRIORITY[b.type] ?? 99));
+
+  return patterns.slice(0, 4);
+}
+
+// Template fallback — used if Groq fails so UI always renders something.
+function patternToTemplate(p) {
+  switch (p.type) {
+    case 'no_habits':
+      return { tag: 'Start here', title: 'No habits yet',
+        body: 'Head over to My Habits and pick one or two to track. Insights start showing up after a few days of check-ins.',
+        cta: { label: 'Go to My Habits', section: 'habits' } };
+    case 'sparse':
+      return { tag: 'Getting started', title: 'Just warming up',
+        body: p.habit_count === 1
+          ? 'One habit in, a couple of check-ins in the last 30 days. Give it another week of checking in and patterns will start showing up here.'
+          : `You've got ${p.habit_count} habits set up but only ${p.total_checkins} check-in${p.total_checkins === 1 ? '' : 's'} in the last 30 days. Keep at it — patterns need a bit more data.` };
+    case 'time_of_day':
+      return { tag: 'Best time', title: `${p.habit} is a ${p.bucket} thing`,
+        body: `${p.bucket_count} of your last ${p.total_checkins} ${p.habit.toLowerCase()} check-ins happened in the ${p.bucket}.` };
+    case 'weekday_slump':
+      return { tag: 'Pattern', title: `${p.habit} slips on ${p.weekday}s`,
+        body: `You average ${p.avg_per_scheduled_day} check-ins on a typical scheduled day, but only ${p.weekday_hits} on ${p.weekday}s.` };
+    case 'consistent':
+      return { tag: 'Consistency', title: `${p.habit} is locked in`,
+        body: `You hit ${p.habit.toLowerCase()} on ${p.days_done} of ${p.days_scheduled} scheduled days (${p.completion_rate_pct}%).` };
+    case 'struggling':
+      return { tag: 'Heads up', title: `${p.habit} keeps slipping`,
+        body: `${p.habit} is getting done on only ${p.days_done} of ${p.days_scheduled} scheduled days (${p.completion_rate_pct}%).` };
+    case 'adapt_frequency': {
+      const labels = p.suggested_days_labels;
+      const dayList = labels.length === 1 ? `${labels[0]}s`
+        : labels.length === 2 ? `${labels[0]} and ${labels[1]}`
+        : labels.slice(0, -1).join(', ') + ', and ' + labels.slice(-1);
+      const freq = labels.length === 1 ? 'once a week' : `${labels.length}× a week`;
+      return {
+        tag: 'Suggestion',
+        title: `${p.habit} feels like a stretch`,
+        body: `You're hitting ${p.habit.toLowerCase()} on only ${p.days_done} of ${p.days_scheduled} scheduled days (${p.completion_rate_pct}%). The days you actually do it are ${dayList} — try ${freq} instead so it sticks.`,
+        cta: {
+          label: `Switch to ${freq}`,
+          action: 'adjust_habit',
+          habitId: p.habit_id,
+          suggestedDays: p.suggested_days,
+        }
+      };
+    }
+    case 'streak':
+      return { tag: 'Streak', title: `${p.streak_days}-day streak on ${p.habit}`,
+        body: `Don't be the one to break it.` };
+    case 'best_day':
+      return { tag: 'Best day', title: `${p.weekday}s are your strongest day`,
+        body: `You log ${p.count} check-ins on ${p.weekday}s, well above your ${p.daily_avg}/day average.` };
+    case 'general':
+      return { tag: 'Warming up', title: `${p.total_checkins} check-ins so far`,
+        body: `You've logged ${p.total_checkins} check-ins across ${p.habit_count} habit${p.habit_count === 1 ? '' : 's'}. Keep going and patterns will surface.` };
+  }
+  return null;
+}
+
+function buildPhrasingPrompt(patterns) {
+  return `You turn structured habit-tracking observations into natural-sounding sentences for a user to read. You do NOT analyze or infer anything new — ONLY rephrase what's already in the data. Never invent numbers, habits, or days that aren't in the input.
+
+Rules:
+- Cite the specific numbers from the data (counts, percentages, days).
+- Casual tone, like a friend noticing a pattern. No corporate language, no "Let's", no "You should", no motivational fluff.
+- No em-dashes. No "Heads up" prefix in the body. No copywriter-style punchlines.
+- 1 sentence per insight (2 max if truly needed).
+
+For each observation return a JSON object with:
+- "tag": a 1-3 word label that fits the pattern type (e.g. "Pattern", "Best time", "Streak", "Consistency", "Heads up", "Warming up")
+- "title": short punchy headline (max ~55 chars)
+- "body": the natural-sentence version citing the numbers
+
+Return ONLY valid JSON in this exact shape:
+{"insights":[{"tag":"...","title":"...","body":"..."}]}
+
+The insights array MUST have exactly ${patterns.length} item${patterns.length === 1 ? '' : 's'}, one per observation, in the same order as given.
+
+Observations to rephrase:
+${JSON.stringify(patterns, null, 2)}`;
+}
+
+app.post('/api/insight', auth, async (req, res) => {
+  const { habits = [], checkins = [] } = req.body || {};
+  const summary  = summarizeForAI(habits, checkins);
+  const patterns = detectPatterns(summary);
+  const fallback = patterns.map(patternToTemplate).filter(Boolean);
+
+  // No key, or patterns don't warrant an LLM call — just return templates.
+  const skipAiTypes = new Set(['sparse', 'general', 'no_habits']);
+  if (!GROQ_KEY || skipAiTypes.has(patterns[0]?.type)) {
+    return res.json({ insights: fallback, source: 'template' });
+  }
+
+  try {
+    const gRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: buildPhrasingPrompt(patterns) }],
+        response_format: { type: 'json_object' },
+        temperature: 0.9,
+      }),
+    });
+    const data = await gRes.json();
+    if (!gRes.ok) return res.json({ insights: fallback, source: 'template' });
+
+    const text = data.choices?.[0]?.message?.content || '';
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch { return res.json({ insights: fallback, source: 'template' }); }
+
+    const aiInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+    if (aiInsights.length !== patterns.length) {
+      return res.json({ insights: fallback, source: 'template' });
+    }
+    // CTAs come from our templates, not the LLM — re-attach them.
+    const merged = aiInsights.map((ai, i) => fallback[i]?.cta ? { ...ai, cta: fallback[i].cta } : ai);
+    res.json({ insights: merged, source: 'ai' });
+  } catch {
+    res.json({ insights: fallback, source: 'template' });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Cadence running on port ${PORT}`);
+  if (!GROQ_KEY) console.log('  (GROQ_API_KEY not set — /api/insight will return 503)');
 });

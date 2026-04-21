@@ -18,11 +18,7 @@
     <nav class="sidebar-nav">
       <a class="nav-item active" data-section="today">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Today
-      </a>
-      <a class="nav-item" data-section="habits">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        My Habits
+        Calendar
       </a>
       <a class="nav-item" data-section="insights">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
@@ -31,6 +27,10 @@
       <a class="nav-item" data-section="stats">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Stats
+      </a>
+      <a class="nav-item" data-section="leaderboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg>
+        Leaderboard
       </a>
     </nav>
 
@@ -42,6 +42,7 @@
           <button class="settings-item" data-view="displayName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Change display name</button>
           <button class="settings-item" data-view="email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Change email</button>
           <button class="settings-item" data-view="password"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Change password</button>
+          <button class="settings-item" id="customizeAvatarBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>Customize avatar</button>
           <div class="settings-divider"></div>
           <button class="settings-item settings-item--danger" id="logoutBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Log out</button>
         </div>
@@ -71,6 +72,12 @@
         </div>
       </div>
 
+      <div class="hp-row">
+        <span class="hp-label">HP</span>
+        <span class="hp-bar"><span class="hp-fill" id="hpFill" style="width:100%"></span></span>
+        <span class="hp-count" id="hpCount">100</span>
+      </div>
+
       <div class="xp-row">
         <span class="xp-level">Lv. 4</span>
         <span class="xp-bar"><span class="xp-fill" style="width:64%"></span></span>
@@ -78,7 +85,7 @@
       </div>
 
       <div class="sidebar-user" id="userBar">
-        <div class="user-avatar" id="userAvatar">A</div>
+        <div class="user-avatar" id="userAvatar"></div>
         <div class="user-info">
           <span class="user-name" id="userName">Admin</span>
           <span class="user-handle">admin</span>
@@ -93,49 +100,56 @@
 
   <main class="main">
 
-    <!-- TODAY -->
+    <!-- CALENDAR -->
     <section class="section active" id="section-today">
-      <div class="page-header">
-        <div class="page-header-left">
-          <p class="page-eyebrow" id="todayDate">—</p>
-          <h1 class="page-title" id="greetingTitle">Good morning.</h1>
+      <div class="cal-header">
+        <div class="cal-header-left">
+          <button class="cal-nav" id="calPrev" aria-label="Previous week">‹</button>
+          <button class="cal-nav" id="calNext" aria-label="Next week">›</button>
+          <h1 class="cal-title" id="calTitle">—</h1>
+          <button class="cal-today-btn" id="calToday">Today</button>
         </div>
-        <div class="streak-badge">
-          <span class="streak-n" id="overallStreak">14</span>
-          <span class="streak-sub">day<br>streak</span>
+        <div class="cal-header-right">
+          <div class="cal-progress" id="progressRow">
+            <div class="cal-progress-track">
+              <div class="cal-progress-fill" id="progressFill" style="width:0%"></div>
+            </div>
+            <span class="cal-progress-label" id="progressLabel">0 / 0 done</span>
+          </div>
+          <div class="streak-badge" id="streakBadge">
+            <span class="streak-n" id="overallStreak">0</span>
+            <span class="streak-sub">day<br>streak</span>
+          </div>
+          <button class="btn-action" id="addHabitBtn">+ Habit</button>
         </div>
       </div>
 
-      <div class="progress-row">
-        <div class="progress-track">
-          <div class="progress-fill" id="progressFill" style="width:0%"></div>
-        </div>
-        <span class="progress-label" id="progressLabel">0 / 5 done</span>
+      <!-- Hidden greeting — kept so existing JS doesn't crash -->
+      <p id="greetingTitle" style="display:none"></p>
+      <p id="todayDate" style="display:none"></p>
+
+      <div class="cal-week-head" id="calWeekHead"></div>
+      <div class="cal-scroll" id="calScroll">
+        <div class="cal-grid" id="calGrid"></div>
       </div>
 
-      <div class="habit-list" id="habitList"></div>
-
-      <div class="ai-nudge" id="aiNudge">
-        <span class="ai-nudge-tag">AI insight</span>
-        <p id="aiNudgeText"></p>
-        <button class="nudge-dismiss" id="nudgeDismiss">Dismiss</button>
+      <!-- Popover for clicking on a habit block -->
+      <div class="cal-event-pop hidden" id="calEventPop">
+        <div class="cal-event-pop-title" id="calEventPopTitle"></div>
+        <div class="cal-event-pop-meta" id="calEventPopMeta"></div>
+        <div class="cal-event-pop-actions">
+          <button class="cal-pop-btn" id="calPopToggle">Mark done</button>
+          <button class="cal-pop-btn" id="calPopEdit">Edit</button>
+          <button class="cal-pop-btn cal-pop-btn--danger" id="calPopDelete">Delete</button>
+        </div>
       </div>
     </section>
 
-    <!-- MY HABITS -->
-    <section class="section" id="section-habits">
-      <div class="page-header">
-        <div class="page-header-left">
-          <p class="page-eyebrow">Manage</p>
-          <h1 class="page-title">My Habits</h1>
-        </div>
-        <button class="btn-action" id="addHabitBtn">+ Add habit</button>
-      </div>
-
-      <div class="habit-cards" id="habitCardsGrid"></div>
-
-      <div class="add-panel hidden" id="addHabitPanel">
-        <h3>New habit</h3>
+    <!-- ADD HABIT MODAL -->
+    <div class="habit-modal-backdrop" id="addHabitPanel">
+      <div class="habit-modal" role="dialog" aria-modal="true">
+        <button class="habit-modal-close" id="cancelHabit" aria-label="Close">✕</button>
+        <h3 id="habitModalTitle">New habit</h3>
         <div class="field">
           <label>Name</label>
           <input type="text" id="newHabitName" placeholder="e.g. Read 20 minutes" />
@@ -151,14 +165,37 @@
             <button class="emoji-btn" data-emoji="🛌">🛌</button>
             <button class="emoji-btn" data-emoji="✍️">✍️</button>
             <button class="emoji-btn" data-emoji="🎸">🎸</button>
+            <button class="emoji-btn" data-emoji="🤸">🤸</button>
+            <button class="emoji-btn" data-emoji="🚶">🚶</button>
+            <button class="emoji-btn" data-emoji="😴">😴</button>
+            <button class="emoji-btn" data-emoji="🚿">🚿</button>
           </div>
         </div>
-        <div class="panel-actions">
-          <button class="btn-cancel" id="cancelHabit">Cancel</button>
-          <button class="btn-action" id="saveHabit">Add</button>
+        <div class="field">
+          <label>Frequency</label>
+          <div class="freq-row" id="freqPicker">
+            <button class="freq-btn active" data-freq="daily">Daily</button>
+            <button class="freq-btn" data-freq="weekdays">Weekdays</button>
+            <button class="freq-btn" data-freq="weekends">Weekends</button>
+            <button class="freq-btn" data-freq="custom">Custom</button>
+          </div>
+          <div class="day-row hidden" id="dayPicker">
+            <button class="day-btn" data-day="1">M</button>
+            <button class="day-btn" data-day="2">T</button>
+            <button class="day-btn" data-day="3">W</button>
+            <button class="day-btn" data-day="4">T</button>
+            <button class="day-btn" data-day="5">F</button>
+            <button class="day-btn" data-day="6">S</button>
+            <button class="day-btn" data-day="0">S</button>
+          </div>
         </div>
+        <div class="field">
+          <label>Time</label>
+          <input type="time" id="newHabitTime" value="09:00" />
+        </div>
+        <button class="btn-action habit-modal-save" id="saveHabit">Add habit</button>
       </div>
-    </section>
+    </div>
 
     <!-- INSIGHTS -->
     <section class="section" id="section-insights">
@@ -167,8 +204,11 @@
           <p class="page-eyebrow">Powered by AI</p>
           <h1 class="page-title">Insights</h1>
         </div>
+        <button class="btn-action" id="refreshInsights">Regenerate</button>
       </div>
-      <div class="insights-list" id="insightsGrid"></div>
+      <div class="insights-list" id="insightsGrid">
+        <div class="lb-loading">Open this tab to generate insights.</div>
+      </div>
     </section>
 
     <!-- STATS -->
@@ -182,15 +222,15 @@
 
       <div class="big-stats">
         <div class="big-stat">
-          <span class="big-stat-n">14</span>
+          <span class="big-stat-n" id="statLongestStreak">0</span>
           <span class="big-stat-l">Longest streak</span>
         </div>
         <div class="big-stat">
-          <span class="big-stat-n">87%</span>
+          <span class="big-stat-n" id="statCompletionRate">—</span>
           <span class="big-stat-l">Completion rate</span>
         </div>
         <div class="big-stat">
-          <span class="big-stat-n">22</span>
+          <span class="big-stat-n" id="statActiveDays">0</span>
           <span class="big-stat-l">Active days</span>
         </div>
       </div>
@@ -203,17 +243,84 @@
 
       <div class="achievements-section">
         <p class="section-micro">Achievements</p>
-        <div class="ach-list">
-          <div class="ach-item unlocked"><span class="ach-icon">🔥</span><div><strong>On Fire</strong><p>7-day streak</p></div><span class="ach-check">✓</span></div>
-          <div class="ach-item unlocked"><span class="ach-icon">🌅</span><div><strong>Early Bird</strong><p>Completed a habit before 8 AM</p></div><span class="ach-check">✓</span></div>
-          <div class="ach-item unlocked"><span class="ach-icon">💯</span><div><strong>Perfect Day</strong><p>All habits done in one day</p></div><span class="ach-check">✓</span></div>
-          <div class="ach-item"><span class="ach-icon">🏔️</span><div><strong>Summit</strong><p>30-day streak</p></div><span class="ach-lock">—</span></div>
-          <div class="ach-item"><span class="ach-icon">⚡</span><div><strong>Unstoppable</strong><p>100 habits completed</p></div><span class="ach-lock">—</span></div>
+        <div class="ach-list" id="achList"></div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section class="section" id="section-leaderboard">
+      <div class="page-header">
+        <div class="page-header-left">
+          <p class="page-eyebrow">Top 50</p>
+          <h1 class="page-title">Leaderboard</h1>
         </div>
+        <button class="btn-action" id="refreshLeaderboard">Refresh</button>
+      </div>
+
+      <div class="leaderboard-list" id="leaderboardList">
+        <div class="lb-loading">Loading…</div>
       </div>
     </section>
 
   </main>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <div class="ai-nudge" id="aiNudge" aria-live="polite">
+    <span class="ai-nudge-tag">AI insight</span>
+    <p id="aiNudgeText"></p>
+    <div class="ai-nudge-actions">
+      <button class="nudge-cta hidden" id="nudgeCta"></button>
+      <button class="nudge-dismiss" id="nudgeDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- AVATAR CREATOR MODAL -->
+  <div class="avatar-modal-backdrop" id="avatarModal">
+    <div class="avatar-modal" role="dialog" aria-modal="true">
+      <button class="avatar-modal-close" id="avatarClose" aria-label="Close">✕</button>
+      <h3 id="avatarTitle">Build your avatar</h3>
+      <p class="avatar-sub" id="avatarSub">Pick a look. You can change any of this later.</p>
+
+      <div class="avatar-preview" id="avatarPreview"></div>
+
+      <div class="avatar-section">
+        <p class="avatar-label">Background</p>
+        <div class="avatar-options" data-category="bg"></div>
+      </div>
+
+      <div class="avatar-section">
+        <p class="avatar-label">Hair</p>
+        <div class="avatar-options" data-category="hair"></div>
+      </div>
+
+      <div class="avatar-section">
+        <p class="avatar-label">Hair color</p>
+        <div class="avatar-options" data-category="hairColor"></div>
+      </div>
+
+      <div class="avatar-section">
+        <p class="avatar-label">Skin</p>
+        <div class="avatar-options" data-category="skin"></div>
+      </div>
+
+      <div class="avatar-section">
+        <p class="avatar-label">Outfit</p>
+        <div class="avatar-options" data-category="outfit"></div>
+      </div>
+
+      <button class="btn-action avatar-save" id="avatarSave">Save avatar</button>
+    </div>
+  </div>
+
+  <div class="death-overlay" id="deathOverlay">
+    <div class="death-inner">
+      <p class="death-skull">💔</p>
+      <h2 class="death-title">Your life force is gone.</h2>
+      <p class="death-sub">You've lost a level. Keep showing up for your habits and it'll come back.</p>
+      <button class="death-cta" id="deathDismiss">Continue</button>
+    </div>
+  </div>
 
   <script src="dashboard.js"></script>
 </body>

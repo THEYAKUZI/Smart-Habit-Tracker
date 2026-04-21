@@ -1,6 +1,6 @@
 // ── Theme toggle ─────────────────────────────────────────────
 document.getElementById('themeToggle').addEventListener('click', () => {
-  const next = document.documentElement.dataset.theme === 'light' ? null : 'light';
+  const next = document.documentElement.dataset.theme === 'dark' ? null : 'dark';
   if (next) {
     document.documentElement.dataset.theme = next;
     localStorage.setItem('cadence-theme', next);
