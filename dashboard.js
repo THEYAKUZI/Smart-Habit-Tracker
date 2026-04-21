@@ -960,6 +960,58 @@ function freqLabel(days) {
 
 const habitModal = document.getElementById('addHabitPanel');
 
+const HABIT_TEMPLATES = [
+  { name: 'Morning run',       emoji: '🏃', freq: 'daily',    time: '07:00' },
+  { name: 'Read 20 minutes',   emoji: '📚', freq: 'daily',    time: '21:00' },
+  { name: 'Meditate',          emoji: '🧘', freq: 'daily',    time: '08:00' },
+  { name: 'Drink 2L water',    emoji: '💧', freq: 'daily',    time: '09:00' },
+  { name: 'Workout',           emoji: '🤸', freq: 'weekdays', time: '06:30' },
+  { name: 'Eat healthy',       emoji: '🥗', freq: 'daily',    time: '12:00' },
+  { name: 'Journal',           emoji: '✍️', freq: 'daily',    time: '22:00' },
+  { name: 'No screens by 10pm',emoji: '🛌', freq: 'daily',    time: '22:00' },
+  { name: 'Walk 30 min',       emoji: '🚶', freq: 'daily',    time: '17:00' },
+  { name: 'Practice guitar',   emoji: '🎸', freq: 'weekdays', time: '18:00' },
+];
+
+function renderTemplates() {
+  const grid = document.getElementById('templatesGrid');
+  grid.innerHTML = '';
+  const existing = new Set(habits.map(h => h.name.toLowerCase()));
+  const available = HABIT_TEMPLATES.filter(t => !existing.has(t.name.toLowerCase()));
+  const show = available.slice(0, 6);
+
+  if (!show.length) {
+    document.getElementById('templatesSection').classList.add('hidden');
+    document.getElementById('templatesDivider').classList.add('hidden');
+    return;
+  }
+  document.getElementById('templatesSection').classList.remove('hidden');
+  document.getElementById('templatesDivider').classList.remove('hidden');
+
+  show.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'template-btn';
+    const freqText = t.freq === 'daily' ? 'Daily' : t.freq === 'weekdays' ? 'Weekdays' : 'Weekends';
+    btn.innerHTML = `
+      <span class="template-emoji">${t.emoji}</span>
+      <span class="template-info">
+        <span class="template-name">${t.name}</span>
+        <span class="template-meta">${freqText} · ${formatTimeLabel(t.time)}</span>
+      </span>
+    `;
+    btn.addEventListener('click', () => applyTemplate(t));
+    grid.appendChild(btn);
+  });
+}
+
+function applyTemplate(t) {
+  document.getElementById('newHabitName').value = t.name;
+  pickEmoji(t.emoji);
+  pickFreq(t.freq);
+  document.getElementById('newHabitTime').value = t.time;
+  document.getElementById('newHabitName').focus();
+}
+
 function openHabitModal({ day = null, time = null, habit = null } = {}) {
   editingHabitId = habit?.id || null;
   document.getElementById('habitModalTitle').textContent = habit ? 'Edit habit' : 'New habit';
@@ -981,6 +1033,13 @@ function openHabitModal({ day = null, time = null, habit = null } = {}) {
   } else {
     customDays = [1,2,3,4,5];
     pickFreq('daily');
+  }
+
+  if (habit) {
+    document.getElementById('templatesSection').classList.add('hidden');
+    document.getElementById('templatesDivider').classList.add('hidden');
+  } else {
+    renderTemplates();
   }
 
   habitModal.classList.add('open');
