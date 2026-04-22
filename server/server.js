@@ -2,9 +2,12 @@ import express from 'express';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -13,6 +16,36 @@ const JWT_SECRET  = process.env.JWT_SECRET || 'dev-secret-change-me';
 const PORT        = process.env.PORT || 3000;
 const GROQ_KEY    = process.env.GROQ_API_KEY || '';
 const GROQ_MODEL  = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+// ── AES-256 encryption for PII (emails) ─────────────────────
+const ENCRYPT_KEY = process.env.ENCRYPT_KEY || crypto.createHash('sha256').update(JWT_SECRET).digest();
+const ALGO = 'aes-256-cbc';
+
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGO, ENCRYPT_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(data) {
+  const [ivHex, enc] = data.split(':');
+  if (!ivHex || !enc) return data; // not encrypted (legacy row)
+  try {
+    const decipher = crypto.createDecipheriv(ALGO, ENCRYPT_KEY, Buffer.from(ivHex, 'hex'));
+    let decrypted = decipher.update(enc, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    return data; // plaintext fallback for old rows
+  }
+}
+
+// Hash email for lookups (can't search encrypted text, so we index a hash)
+function emailHash(email) {
+  return crypto.createHmac('sha256', JWT_SECRET).update(email.toLowerCase()).digest('hex');
+}
 
 // ── DB ────────────────────────────────────────────────────────
 const db = new Database(path.join(__dirname, 'cadence.db'));
@@ -45,6 +78,47 @@ if (!cols.some(c => c.name === 'username')) {
 if (!cols.some(c => c.name === 'avatar')) {
   db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
 }
+if (!cols.some(c => c.name === 'email_verified')) {
+  db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0');
+}
+if (!cols.some(c => c.name === 'email_hash')) {
+  db.exec('ALTER TABLE users ADD COLUMN email_hash TEXT');
+  // Backfill: hash existing plaintext emails
+  const rows = db.prepare('SELECT id, email FROM users').all();
+  const upd = db.prepare('UPDATE users SET email_hash = ? WHERE id = ?');
+  for (const r of rows) upd.run(emailHash(r.email), r.id);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_email_hash ON users(email_hash)');
+}
+
+// Verification codes table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS verification_codes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    code       TEXT    NOT NULL,
+    expires_at TEXT    NOT NULL,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function createVerificationCode(userId) {
+  const code = generateCode();
+  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+  db.prepare('UPDATE verification_codes SET used = 1 WHERE user_id = ? AND used = 0').run(userId);
+  db.prepare('INSERT INTO verification_codes (user_id, code, expires_at) VALUES (?, ?, ?)').run(userId, code, expires);
+  return code;
+}
+
+function sendVerificationEmail(email, code) {
+  // Placeholder — in production this would call Resend/SendGrid/etc.
+  console.log(`[EMAIL] Verification code for ${email}: ${code}`);
+}
 
 // ── Validation helpers ────────────────────────────────────────
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,6 +133,25 @@ function validatePassword(pw) {
 
 // ── App ───────────────────────────────────────────────────────
 const app = express();
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // allow inline scripts for our SPA
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Rate limiting on auth endpoints (brute-force prevention)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                   // 10 attempts per window
+  message: { error: 'Too many attempts — try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/login', authLimiter);
+app.use('/api/register', authLimiter);
+app.use('/api/verify-email', authLimiter);
+
 app.use(express.json());
 app.use(express.static(ROOT, { extensions: ['html'] }));
 
@@ -81,7 +174,7 @@ function userPublic(row) {
     try { avatar = JSON.parse(row.avatar); } catch {}
   }
   return {
-    id: row.id, email: row.email, username: row.username, name: row.name,
+    id: row.id, email: decrypt(row.email), username: row.username, name: row.name,
     level: row.level, xp: row.xp, avatar
   };
 }
@@ -107,7 +200,8 @@ app.post('/api/register', async (req, res) => {
   if (pwErr) return res.status(400).json({ error: pwErr });
 
   const mail = email.trim().toLowerCase();
-  if (db.prepare('SELECT id FROM users WHERE email = ?').get(mail)) {
+  const mailHash = emailHash(mail);
+  if (db.prepare('SELECT id FROM users WHERE email_hash = ?').get(mailHash)) {
     return res.status(409).json({ error: 'Email already registered' });
   }
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(uname)) {
@@ -115,12 +209,51 @@ app.post('/api/register', async (req, res) => {
   }
 
   const hash = await bcrypt.hash(password, 10);
+  const encryptedEmail = encrypt(mail);
   const info = db.prepare(
-    'INSERT INTO users (email, username, password_hash, name) VALUES (?, ?, ?, ?)'
-  ).run(mail, uname, hash, name.trim());
+    'INSERT INTO users (email, email_hash, username, password_hash, name) VALUES (?, ?, ?, ?, ?)'
+  ).run(encryptedEmail, mailHash, uname, hash, name.trim());
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  res.json({ token: issueToken(user), user: userPublic(user) });
+  const code = createVerificationCode(user.id);
+  sendVerificationEmail(mail, code);
+
+  res.json({ token: issueToken(user), user: userPublic(user), requiresVerification: true, devCode: code });
+});
+
+app.post('/api/verify-email', auth, (req, res) => {
+  const { code } = req.body || {};
+  if (!code || typeof code !== 'string' || code.length !== 6) {
+    return res.status(400).json({ error: 'Invalid code' });
+  }
+
+  const row = db.prepare(
+    'SELECT * FROM verification_codes WHERE user_id = ? AND used = 0 ORDER BY created_at DESC LIMIT 1'
+  ).get(req.user.uid);
+
+  if (!row) return res.status(400).json({ error: 'No pending code — request a new one' });
+  if (new Date(row.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Code expired — request a new one' });
+  }
+  if (row.code !== code.trim()) {
+    return res.status(400).json({ error: 'Wrong code' });
+  }
+
+  db.prepare('UPDATE verification_codes SET used = 1 WHERE id = ?').run(row.id);
+  db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(req.user.uid);
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.uid);
+  res.json({ ok: true, user: userPublic(user) });
+});
+
+app.post('/api/resend-code', auth, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.uid);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.email_verified) return res.json({ ok: true, message: 'Already verified' });
+
+  const code = createVerificationCode(user.id);
+  sendVerificationEmail(decrypt(user.email), code);
+  res.json({ ok: true, devCode: code });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -129,7 +262,7 @@ app.post('/api/login', async (req, res) => {
   if (!id || !password) return res.status(400).json({ error: 'Missing fields' });
 
   const user = id.includes('@')
-    ? db.prepare('SELECT * FROM users WHERE email = ?').get(id)
+    ? db.prepare('SELECT * FROM users WHERE email_hash = ?').get(emailHash(id))
     : db.prepare('SELECT * FROM users WHERE username = ?').get(id);
   if (!user) return res.status(401).json({ error: 'Incorrect credentials' });
 
@@ -158,11 +291,13 @@ app.patch('/api/me/email', auth, (req, res) => {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'Invalid email' });
   }
-  const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?')
-    .get(email.toLowerCase(), req.user.uid);
+  const newHash = emailHash(email.toLowerCase());
+  const existing = db.prepare('SELECT id FROM users WHERE email_hash = ? AND id != ?')
+    .get(newHash, req.user.uid);
   if (existing) return res.status(409).json({ error: 'Email already in use' });
 
-  db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email.toLowerCase(), req.user.uid);
+  db.prepare('UPDATE users SET email = ?, email_hash = ? WHERE id = ?')
+    .run(encrypt(email.toLowerCase()), newHash, req.user.uid);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.uid);
   res.json({ user: userPublic(user) });
 });
@@ -256,6 +391,7 @@ function summarizeForAI(habits, checkins) {
       id: h.id,
       name: h.name,
       emoji: h.emoji,
+      time: h.time || '09:00',
       current_streak: h.streak || 0,
       scheduled_day_indices: sched,
       scheduled_days: sched.map(d => DAYNAMES[d]),
@@ -298,13 +434,29 @@ function detectPatterns(summary) {
     byBucket.sort((a, b) => b.count - a.count);
     const top = byBucket[0];
     if (top.count >= 3 && top.count >= h.checkins_last_30 * 0.6 && h.checkins_last_30 >= 4) {
-      patterns.push({
-        type: 'time_of_day',
-        habit: h.name, emoji: h.emoji,
-        bucket: top.name,
-        bucket_count: top.count,
-        total_checkins: h.checkins_last_30
-      });
+      const schedHour = parseInt(h.time?.split(':')[0]) || 9;
+      const schedBucket = schedHour < 6 ? 'night' : schedHour < 12 ? 'morning' : schedHour < 18 ? 'afternoon' : 'evening';
+      const BUCKET_MID = { night: '05:00', morning: '08:00', afternoon: '14:00', evening: '20:00' };
+      if (schedBucket !== top.name) {
+        patterns.push({
+          type: 'shift_time',
+          habit_id: h.id,
+          habit: h.name, emoji: h.emoji,
+          current_bucket: schedBucket,
+          better_bucket: top.name,
+          bucket_count: top.count,
+          total_checkins: h.checkins_last_30,
+          suggested_time: BUCKET_MID[top.name],
+        });
+      } else {
+        patterns.push({
+          type: 'time_of_day',
+          habit: h.name, emoji: h.emoji,
+          bucket: top.name,
+          bucket_count: top.count,
+          total_checkins: h.checkins_last_30
+        });
+      }
     }
 
     // Weekday slump: a scheduled weekday has ≤40% of the avg (and avg ≥ 2)
@@ -383,6 +535,26 @@ function detectPatterns(summary) {
     }
   }
 
+  // Too many habits: 6+ habits and overall completion ≤ 30%
+  if (summary.habit_count >= 6) {
+    const withData = summary.habits.filter(h => h.scheduled_days_last_30 >= 7);
+    if (withData.length >= 6) {
+      const avgCompletion = Math.round(
+        withData.reduce((s, h) => s + (h.completion_rate_pct || 0), 0) / withData.length
+      );
+      if (avgCompletion <= 30) {
+        const sorted = [...withData].sort((a, b) => (b.completion_rate_pct || 0) - (a.completion_rate_pct || 0));
+        const topThree = sorted.slice(0, 3);
+        patterns.push({
+          type: 'too_many',
+          habit_count: summary.habit_count,
+          avg_completion_pct: avgCompletion,
+          top_habits: topThree.map(h => ({ name: h.name, emoji: h.emoji, pct: h.completion_rate_pct })),
+        });
+      }
+    }
+  }
+
   // Best overall day: day with ≥1.5× average count and ≥4 check-ins
   const overall = [0,0,0,0,0,0,0];
   for (const h of summary.habits) {
@@ -410,9 +582,9 @@ function detectPatterns(summary) {
 
   // Actionable / attention-grabbing patterns first; positive observations after.
   const PRIORITY = {
-    adapt_frequency: 0, struggling: 1, weekday_slump: 2,
-    streak: 3, time_of_day: 4, consistent: 5, best_day: 6,
-    sparse: 7, general: 8, no_habits: 9,
+    too_many: 0, adapt_frequency: 1, shift_time: 2, struggling: 3, weekday_slump: 4,
+    streak: 5, time_of_day: 6, consistent: 7, best_day: 8,
+    sparse: 9, general: 10, no_habits: 11,
   };
   patterns.sort((a, b) => (PRIORITY[a.type] ?? 99) - (PRIORITY[b.type] ?? 99));
 
@@ -426,11 +598,25 @@ function patternToTemplate(p) {
       return { tag: 'Start here', title: 'No habits yet',
         body: 'Head over to My Habits and pick one or two to track. Insights start showing up after a few days of check-ins.',
         cta: { label: 'Go to My Habits', section: 'habits' } };
+    case 'too_many': {
+      const names = p.top_habits.map(h => `${h.emoji} ${h.name}`).join(', ');
+      return { tag: 'Simplify', title: `${p.habit_count} habits might be too many right now`,
+        body: `You're averaging ${p.avg_completion_pct}% across ${p.habit_count} habits. Your strongest ones are ${names}. Try focusing on just those for a while.` };
+    }
     case 'sparse':
       return { tag: 'Getting started', title: 'Just warming up',
         body: p.habit_count === 1
           ? 'One habit in, a couple of check-ins in the last 30 days. Give it another week of checking in and patterns will start showing up here.'
           : `You've got ${p.habit_count} habits set up but only ${p.total_checkins} check-in${p.total_checkins === 1 ? '' : 's'} in the last 30 days. Keep at it — patterns need a bit more data.` };
+    case 'shift_time':
+      return { tag: 'Try shifting', title: `${p.habit} works better in the ${p.better_bucket}`,
+        body: `It's scheduled for the ${p.current_bucket}, but ${p.bucket_count} of your last ${p.total_checkins} check-ins actually happen in the ${p.better_bucket}.`,
+        cta: {
+          label: `Move to ${p.better_bucket}`,
+          action: 'shift_time',
+          habitId: p.habit_id,
+          suggestedTime: p.suggested_time,
+        } };
     case 'time_of_day':
       return { tag: 'Best time', title: `${p.habit} is a ${p.bucket} thing`,
         body: `${p.bucket_count} of your last ${p.total_checkins} ${p.habit.toLowerCase()} check-ins happened in the ${p.bucket}.` };

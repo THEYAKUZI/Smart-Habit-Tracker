@@ -150,3 +150,75 @@
   letter-spacing: 0.04em; color: #E4E8DF; margin-bottom: 8px;
 }
 .modal-success p { font-size: 0.85rem; color: #535950; line-height: 1.6; }
+
+/* ── Email verification ── */
+.verify-screen {
+  text-align: center;
+  padding: 12px 0 0;
+}
+.verify-icon {
+  font-size: 2.2rem;
+  display: block;
+  margin-bottom: 12px;
+}
+.verify-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.04em;
+  color: #E4E8DF;
+  margin-bottom: 6px;
+}
+.verify-sub {
+  font-size: 0.82rem;
+  color: #535950;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.verify-sub strong {
+  color: #E4E8DF;
+}
+.verify-inputs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.verify-inputs input {
+  width: 44px; height: 52px;
+  background: #0C0E0B;
+  border: 1px solid #1C1F19;
+  border-radius: 6px;
+  color: #E4E8DF;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.verify-inputs input:focus {
+  border-color: #B9F23C;
+}
+.verify-resend {
+  font-size: 0.75rem;
+  color: #535950;
+  margin-top: 16px;
+}
+.verify-resend-btn {
+  background: none;
+  border: none;
+  color: #B9F23C;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.verify-resend-btn:hover { opacity: 0.8; }
+.verify-hint {
+  font-size: 0.75rem;
+  color: #B9F23C;
+  margin-top: 8px;
+  min-height: 1.2em;
+}

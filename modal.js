@@ -148,9 +148,9 @@ signupForm.addEventListener('submit', async e => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-    localStorage.setItem('cadence-token', data.token);
-    localStorage.setItem('cadence-user', JSON.stringify(data.user));
-    window.location.href = 'dashboard.html';
+    // Store creds temporarily — redirect after email verification
+    pendingAuth = { token: data.token, user: data.user, devCode: data.devCode || null };
+    showVerifyScreen(email.value.trim());
   } catch (err) {
     btn.textContent = originalText;
     btn.classList.remove('loading');
@@ -158,6 +158,136 @@ signupForm.addEventListener('submit', async e => {
     showAuthError(signupForm, err.message);
   }
 });
+
+// ── Email verification (placeholder) ─────────────────────────
+
+let pendingAuth = null;
+
+function showVerifyScreen(emailAddr) {
+  const inner = modal.querySelector('.modal-tabs');
+  if (inner) inner.style.display = 'none';
+  signupForm.style.display = 'none';
+  signinForm.style.display = 'none';
+
+  let verify = modal.querySelector('#verifyScreen');
+  if (!verify) {
+    verify = document.createElement('div');
+    verify.id = 'verifyScreen';
+    verify.innerHTML = `
+      <div class="verify-screen">
+        <span class="verify-icon">✉️</span>
+        <h3 class="verify-title">Check your email</h3>
+        <p class="verify-sub">We sent a 6-digit code to <strong id="verifyEmail"></strong></p>
+        <div class="verify-inputs" id="verifyInputs">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+        </div>
+        <button class="btn-modal" id="verifyBtn" disabled>Verify</button>
+        <p class="verify-resend">Didn't get it? <button type="button" class="verify-resend-btn" id="resendBtn">Resend code</button></p>
+        <p class="verify-hint" id="verifyHint"></p>
+      </div>
+    `;
+    modal.appendChild(verify);
+
+    const inputs = verify.querySelectorAll('.verify-inputs input');
+    inputs.forEach((inp, i) => {
+      inp.addEventListener('input', () => {
+        inp.value = inp.value.replace(/\D/g, '');
+        if (inp.value && i < inputs.length - 1) inputs[i + 1].focus();
+        document.getElementById('verifyBtn').disabled =
+          [...inputs].some(x => !x.value);
+      });
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus();
+      });
+      inp.addEventListener('paste', e => {
+        const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+        if (text.length >= 6) {
+          e.preventDefault();
+          inputs.forEach((x, j) => { x.value = text[j] || ''; });
+          inputs[5].focus();
+          document.getElementById('verifyBtn').disabled = false;
+        }
+      });
+    });
+
+    document.getElementById('verifyBtn').addEventListener('click', async () => {
+      const code = [...inputs].map(x => x.value).join('');
+      if (code.length < 6 || !pendingAuth) return;
+      const btn = document.getElementById('verifyBtn');
+      btn.textContent = 'Verifying…';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/verify-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${pendingAuth.token}`,
+          },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Verification failed');
+        localStorage.setItem('cadence-token', pendingAuth.token);
+        localStorage.setItem('cadence-user', JSON.stringify(data.user || pendingAuth.user));
+        pendingAuth = null;
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        btn.textContent = 'Verify';
+        btn.disabled = false;
+        const hint = document.getElementById('verifyHint');
+        hint.textContent = err.message;
+        hint.style.color = '#d85555';
+        inputs.forEach(x => { x.value = ''; });
+        inputs[0].focus();
+        setTimeout(() => { hint.textContent = ''; hint.style.color = ''; }, 4000);
+      }
+    });
+
+    document.getElementById('resendBtn').addEventListener('click', async () => {
+      if (!pendingAuth) return;
+      const hint = document.getElementById('verifyHint');
+      try {
+        const res = await fetch('/api/resend-code', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${pendingAuth.token}`,
+          }
+        });
+        const rData = await res.json();
+        if (!res.ok) throw new Error('Failed to resend');
+        hint.style.color = '#B9F23C';
+        if (rData.devCode) {
+          pendingAuth.devCode = rData.devCode;
+          hint.textContent = `New code: ${rData.devCode}`;
+        } else {
+          hint.textContent = 'New code sent — check your inbox.';
+        }
+      } catch {
+        hint.style.color = '#d85555';
+        hint.textContent = 'Couldn\'t resend. Try again.';
+      }
+      setTimeout(() => { hint.textContent = ''; hint.style.color = ''; }, 4000);
+    });
+  }
+
+  document.getElementById('verifyEmail').textContent = emailAddr;
+  verify.style.display = 'block';
+
+  // Dev mode: show the code on screen so you don't need the console
+  const hint = document.getElementById('verifyHint');
+  if (pendingAuth?.devCode) {
+    hint.textContent = `Dev code: ${pendingAuth.devCode}`;
+    hint.style.color = '#B9F23C';
+  }
+
+  setTimeout(() => verify.querySelector('.verify-inputs input')?.focus(), 200);
+}
 
 // ── Sign in submit ────────────────────────────────────────────
 

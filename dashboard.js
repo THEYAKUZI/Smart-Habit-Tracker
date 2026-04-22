@@ -1131,6 +1131,7 @@ function renderInsightsList(insights) {
       btn.addEventListener('click', () => {
         const cta = btn._cta;
         if (cta.action === 'adjust_habit') return applyAdjustHabit(cta);
+        if (cta.action === 'shift_time') return applyShiftTime(cta);
         if (cta.section) document.querySelector(`.nav-item[data-section="${cta.section}"]`)?.click();
       });
     }
@@ -1217,6 +1218,10 @@ document.getElementById('nudgeCta').addEventListener('click', e => {
     applyAdjustHabit(cta);
     return;
   }
+  if (cta.action === 'shift_time') {
+    applyShiftTime(cta);
+    return;
+  }
   if (cta.section) {
     hideTodayNudge();
     document.querySelector(`.nav-item[data-section="${cta.section}"]`)?.click();
@@ -1235,6 +1240,21 @@ function applyAdjustHabit(cta) {
   hideTodayNudge();
   showToast('Schedule updated', `${habit.name} → ${newLabel}`);
   // Bust cache + refetch so the nudge reflects the new schedule.
+  localStorage.removeItem('cadence-insights');
+  showTodayNudge();
+}
+
+function applyShiftTime(cta) {
+  const habit = habits.find(h => h.id === cta.habitId);
+  if (!habit || !cta.suggestedTime) return;
+  const oldTime = formatTimeLabel(habit.time || '09:00');
+  const newTime = formatTimeLabel(cta.suggestedTime);
+  if (!confirm(`Move ${habit.name} from ${oldTime} to ${newTime}?`)) return;
+  habit.time = cta.suggestedTime;
+  save();
+  renderCalendar();
+  hideTodayNudge();
+  showToast('Time updated', `${habit.name} → ${newTime}`);
   localStorage.removeItem('cadence-insights');
   showTodayNudge();
 }
@@ -1338,6 +1358,54 @@ function renderStats() {
     lbl.textContent = labels[i];
     labelsEl.appendChild(lbl);
   });
+
+  // 30-day heatmap
+  const heatmapEl = document.getElementById('heatmap');
+  if (heatmapEl) {
+    const today = new Date();
+    heatmapEl.innerHTML = '';
+    const dayLabels = ['M','T','W','T','F','S','S'];
+    // Build 30 cells, oldest first (top-left = 29 days ago)
+    const cells = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const ds = toLocalDateStr(d);
+      const count = stats.byDate[ds]?.size || 0;
+      const level = count === 0 ? 0 : count <= 1 ? 1 : count <= 2 ? 2 : count <= 4 ? 3 : 4;
+      const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      cell.dataset.count = count;
+      cell.dataset.level = level;
+      cell.dataset.tip = `${shortDate}: ${count} check-in${count === 1 ? '' : 's'}`;
+      cells.push(cell);
+    }
+    // Pad start so first cell aligns to correct weekday column (Mon=0)
+    const firstDay = new Date(today);
+    firstDay.setDate(today.getDate() - 29);
+    const startCol = (firstDay.getDay() + 6) % 7; // 0=Mon
+    for (let i = 0; i < startCol; i++) {
+      const spacer = document.createElement('div');
+      spacer.style.visibility = 'hidden';
+      heatmapEl.appendChild(spacer);
+    }
+    cells.forEach(c => heatmapEl.appendChild(c));
+    // Day-of-week labels row
+    let labelsRow = heatmapEl.parentElement.querySelector('.heatmap-labels');
+    if (!labelsRow) {
+      labelsRow = document.createElement('div');
+      labelsRow.className = 'heatmap-labels';
+      heatmapEl.after(labelsRow);
+    }
+    labelsRow.innerHTML = '';
+    dayLabels.forEach(l => {
+      const span = document.createElement('span');
+      span.className = 'heatmap-label';
+      span.textContent = l;
+      labelsRow.appendChild(span);
+    });
+  }
 
   const achList = document.getElementById('achList');
   achList.innerHTML = '';

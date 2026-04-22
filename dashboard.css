@@ -1303,6 +1303,65 @@ body {
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--mid);
 }
 
+/* ── Heatmap ── */
+.heatmap-section {
+  padding: 44px 52px;
+}
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 16px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--rule);
+  position: relative;
+  transition: transform 0.1s;
+}
+.heatmap-cell:hover {
+  transform: scale(1.25);
+  z-index: 1;
+}
+.heatmap-cell[data-count="0"] { background: var(--rule); }
+.heatmap-cell[data-level="1"] { background: rgba(185,242,60,0.2); }
+.heatmap-cell[data-level="2"] { background: rgba(185,242,60,0.45); }
+.heatmap-cell[data-level="3"] { background: rgba(185,242,60,0.7); }
+.heatmap-cell[data-level="4"] { background: var(--lime); }
+.heatmap-cell::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 3px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.heatmap-cell:hover::after { opacity: 1; }
+.heatmap-labels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+.heatmap-label {
+  text-align: center;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mid);
+}
+
 /* ── Achievements ── */
 .achievements-section {
   padding: 44px 52px;
